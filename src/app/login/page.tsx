@@ -11,7 +11,7 @@ import { DollarSign, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@ledger.local");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();

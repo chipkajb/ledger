@@ -9,10 +9,10 @@ services:
       - ledger_data:/data
     environment:
       - DATABASE_URL=/data/ledger.db
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production-32-chars-min}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@ledger.local}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-ledger2026}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s

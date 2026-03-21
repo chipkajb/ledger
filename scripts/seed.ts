@@ -590,7 +590,7 @@ upsertSetting.run("default_income", "17000");
 upsertSetting.run("charity_bank_start_balance", "13192.89");
 upsertSetting.run("app_initialized", "true");
 
-console.log(`✅ App settings seeded (admin: ${adminEmail} / password: ${adminPassword})`);
+console.log(`✅ App settings seeded (admin: ${adminEmail})`);
 
 db.close();
 console.log("\n🎉 Seed complete!");
