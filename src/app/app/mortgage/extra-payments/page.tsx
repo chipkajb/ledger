@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, currentDate } from "@/lib/utils";
 import { format } from "date-fns";
+import { Upload } from "lucide-react";
 
 interface ExtraPaymentRecord {
   id: string;
@@ -17,8 +18,10 @@ interface ExtraPaymentRecord {
 }
 
 interface MortgageSummary {
-  id: string;
+  id: number;
+  label: string;
   name: string;
+  isActive: boolean;
   active: boolean;
   summary: {
     moneySaved: number;
@@ -33,7 +36,7 @@ interface MortgageSummary {
 
 export default function ExtraPaymentsPage() {
   const [mortgages, setMortgages] = useState<MortgageSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string>("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [extraPayments, setExtraPayments] = useState<ExtraPaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +46,10 @@ export default function ExtraPaymentsPage() {
   const [formDate, setFormDate] = useState(currentDate());
   const [formAmount, setFormAmount] = useState("");
   const [formNote, setFormNote] = useState("");
+
+  // Import state
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMortgages = useCallback(async () => {
     try {
@@ -147,6 +154,34 @@ export default function ExtraPaymentsPage() {
     }
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !selectedId) return;
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mortgageId", String(selectedId));
+      const res = await fetch("/api/import/mortgage/extra-payments", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Import failed");
+      toast.success(
+        `Imported ${data.imported} payment${data.imported !== 1 ? "s" : ""}` +
+        (data.totalSkipped > 0 ? ` (${data.totalSkipped} skipped)` : "")
+      );
+      await loadExtraPayments();
+      await loadMortgages();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -185,14 +220,17 @@ export default function ExtraPaymentsPage() {
           </p>
         </div>
         {mortgages.length > 1 && (
-          <Select value={selectedId} onValueChange={setSelectedId}>
+          <Select
+            value={selectedId !== null ? String(selectedId) : ""}
+            onValueChange={(v) => setSelectedId(parseInt(v))}
+          >
             <SelectTrigger className="w-56">
               <SelectValue placeholder="Select mortgage" />
             </SelectTrigger>
             <SelectContent>
               {mortgages.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name}
+                <SelectItem key={m.id} value={String(m.id)}>
+                  {m.name ?? m.label}
                   {m.active ? " (Active)" : ""}
                 </SelectItem>
               ))}
@@ -334,6 +372,45 @@ export default function ExtraPaymentsPage() {
               {submitting ? "Adding..." : "Add Payment"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Import extra payments */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Import Extra Payments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Upload a CSV or XLSX file with columns: <span className="font-medium">Date</span>,{" "}
+            <span className="font-medium">Amount</span>, <span className="font-medium">Note</span> (optional).
+            Dates should be in YYYY-MM-DD or M/D/YYYY format.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <Button
+              variant="outline"
+              disabled={importing || !selectedId}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {importing ? "Importing..." : "Choose File"}
+            </Button>
+            <span className="text-xs text-muted-foreground">CSV or XLSX accepted</span>
+            <a
+              href="/templates/extra-payments-template.csv"
+              download
+              className="text-xs text-primary underline-offset-4 hover:underline"
+            >
+              Download template
+            </a>
+          </div>
         </CardContent>
       </Card>
 

@@ -20,8 +20,10 @@ import { format } from "date-fns";
 import type { AmortizationRow, MortgageSummary } from "@/lib/mortgage";
 
 interface MortgageData {
-  id: string;
+  id: number;
+  label: string;
   name: string;
+  isActive: boolean;
   active: boolean;
   schedule: AmortizationRow[];
   summary: MortgageSummary;
@@ -48,7 +50,7 @@ export default function MortgageOverviewPage() {
           const data: MortgageData[] = await res.json();
           setMortgages(data);
           const active = data.find((m) => m.active) ?? data[0];
-          if (active) setSelectedId(active.id);
+          if (active) setSelectedId(String(active.id));
         }
       } catch {
         // ignore
@@ -59,7 +61,7 @@ export default function MortgageOverviewPage() {
     load();
   }, []);
 
-  const mortgage = mortgages.find((m) => m.id === selectedId);
+  const mortgage = mortgages.find((m) => String(m.id) === selectedId);
   const { schedule = [], summary } = mortgage ?? {};
 
   // Build balance-over-time chart data (sample every few rows for performance)
@@ -131,8 +133,8 @@ export default function MortgageOverviewPage() {
             </SelectTrigger>
             <SelectContent>
               {mortgages.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name}
+                <SelectItem key={m.id} value={String(m.id)}>
+                  {m.name ?? m.label}
                   {m.active ? " (Active)" : ""}
                 </SelectItem>
               ))}
