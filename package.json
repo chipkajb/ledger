@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "npm rebuild better-sqlite3",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -11,7 +12,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "node --env-file=.env.local ./node_modules/tsx/dist/cli.mjs scripts/seed.ts"
   },
   "dependencies": {
     "next": "^14.2.29",
