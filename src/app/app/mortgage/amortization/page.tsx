@@ -24,19 +24,9 @@ interface Mortgage {
   downPayment: number;
 }
 
-interface MortgageApiResponse {
-  mortgages: Mortgage[];
-  active: Mortgage | null;
-  schedule: AmortizationRow[];
-  summary: {
-    currentBalance: number;
-    payoffDate: string;
-    monthsSaved: number;
-  } | null;
-}
-
-interface MortgageDetail {
-  mortgage: Mortgage;
+interface MortgageItem extends Mortgage {
+  name: string;
+  active: boolean;
   schedule: AmortizationRow[];
 }
 
@@ -67,7 +57,6 @@ export default function AmortizationPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [schedules, setSchedules] = useState<Map<number, AmortizationRow[]>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [showRemaining, setShowRemaining] = useState(false);
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("paymentNumber");
@@ -78,15 +67,17 @@ export default function AmortizationPage() {
       try {
         const res = await fetch("/api/mortgage");
         if (res.ok) {
-          const data: MortgageApiResponse = await res.json();
-          setAllMortgages(data.mortgages ?? []);
-          const active = data.active ?? data.mortgages?.[0];
-          if (active) {
-            setSelectedId(active.id);
-            // Store the already-loaded schedule for the active mortgage
-            if (data.schedule) {
-              setSchedules(new Map([[active.id, data.schedule]]));
+          const data: MortgageItem[] = await res.json();
+          setAllMortgages(data);
+          const activeItem = data.find((m) => m.active) ?? data[0];
+          if (activeItem) {
+            setSelectedId(activeItem.id);
+            // Pre-load all schedules from the response
+            const scheduleMap = new Map<number, AmortizationRow[]>();
+            for (const item of data) {
+              if (item.schedule) scheduleMap.set(item.id, item.schedule);
             }
+            setSchedules(scheduleMap);
           }
         }
       } catch { /* ignore */ }
@@ -94,21 +85,6 @@ export default function AmortizationPage() {
     }
     load();
   }, []);
-
-  // Load schedule for a mortgage if not already cached
-  useEffect(() => {
-    if (!selectedId || schedules.has(selectedId)) return;
-    setLoadingSchedule(true);
-    fetch(`/api/mortgage/${selectedId}`)
-      .then((r) => r.json())
-      .then((d: MortgageDetail) => {
-        if (d.schedule) {
-          setSchedules((prev) => new Map(prev).set(selectedId, d.schedule));
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoadingSchedule(false));
-  }, [selectedId]);
 
   const currentSchedule = selectedId ? (schedules.get(selectedId) ?? []) : [];
   const currentMortgage = allMortgages.find((m) => m.id === selectedId);
@@ -228,10 +204,7 @@ export default function AmortizationPage() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {loadingSchedule ? (
-            <div className="h-64 animate-pulse bg-muted rounded-xl m-4" />
-          ) : (
-            <div className="overflow-x-auto">
+          <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
@@ -293,8 +266,7 @@ export default function AmortizationPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-          )}
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
