@@ -3,14 +3,23 @@
  * Run with: pnpm seed
  *
  * Reads from the parent directory (workspace/ledger):
- * - Budget 2026.xlsx
+ * - Budget YYYY.xlsx  (any year — scanned automatically)
  * - Mortgage.xlsx
  * - Net Worth.xlsx
+ *
+ * Budget YYYY.xlsx expected format per monthly sheet:
+ *   Optional header rows:
+ *     "Predicted Income: $XX,XXX"
+ *     "Charity Bank Carryover: $XX,XXX"
+ *   Then a blank row, then a table header row (Date | Category | Description | Amount)
+ *   Followed by transaction rows.
+ *   Alternatively: header row with any recognisable column names.
  */
 
 import Database from "better-sqlite3";
 import * as XLSX from "xlsx";
 import * as bcrypt from "bcryptjs";
+import * as fs from "fs";
 import path from "path";
 import { format, addDays } from "date-fns";
 
@@ -130,7 +139,6 @@ console.log("✅ Tables created");
 
 // ─── Helper: Excel serial date to ISO date ─────────────────────────────────────
 function excelDateToISO(serial: number): string {
-  // Excel epoch is Jan 1, 1900 (with the 1900 leap year bug)
   const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
   const d = addDays(excelEpoch, serial);
   return format(d, "yyyy-MM-dd");
@@ -145,6 +153,59 @@ function getISOWeek(dateStr: string): string {
   const weekNum = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
   return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
 }
+
+/** Parse a raw cell value into an ISO date string or null */
+function parseDate(raw: unknown): string | null {
+  if (!raw || raw === 0) return null;
+  if (typeof raw === "number" && raw > 40000) {
+    return excelDateToISO(raw);
+  }
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // M/D/YYYY or MM/DD/YYYY
+    if (s.includes("/")) {
+      const parts = s.split("/");
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
+      }
+    }
+    // M/D/YY
+    if (/^\d{1,2}\/\d{1,2}\/\d{2}$/.test(s)) {
+      const parts = s.split("/");
+      const yr = parseInt(parts[2]);
+      const fullYr = yr < 70 ? 2000 + yr : 1900 + yr;
+      return `${fullYr}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
+    }
+  }
+  return null;
+}
+
+/** Parse a raw cell value to a number, stripping currency symbols */
+function parseAmount(raw: unknown): number {
+  if (typeof raw === "number") return raw;
+  if (typeof raw === "string") {
+    const n = parseFloat(raw.replace(/[$,\s]/g, ""));
+    if (!isNaN(n)) return n;
+  }
+  return 0;
+}
+
+/** Case-insensitive column finder */
+function findCol(headers: string[], ...names: string[]): number {
+  const lc = headers.map((h) => h.toLowerCase().trim());
+  for (const name of names) {
+    const idx = lc.findIndex((h) => h.includes(name.toLowerCase()));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+const MONTH_NAMES: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
 
 // ─── Seed Budget Categories ────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -208,7 +269,21 @@ console.log(`✅ Inserted ${CATEGORIES.length} budget categories`);
 
 // Get category ID map
 const catRows = db.prepare("SELECT id, name FROM budget_categories").all() as Array<{id: number; name: string}>;
-const catMap = new Map(catRows.map((r) => [r.name, r.id]));
+const catMap = new Map(catRows.map((r) => [r.name.toLowerCase(), r.id]));
+
+// Helper: fuzzy category matching
+function findCategoryId(raw: string): number | null {
+  if (!raw) return null;
+  const lower = raw.trim().toLowerCase();
+  // Exact match
+  if (catMap.has(lower)) return catMap.get(lower)!;
+  // Partial match
+  for (const entry of Array.from(catMap.entries())) {
+    const [name, id] = entry;
+    if (lower.includes(name) || name.includes(lower)) return id;
+  }
+  return null;
+}
 
 // ─── Seed Net Worth Snapshots ──────────────────────────────────────────────────
 try {
@@ -243,29 +318,18 @@ try {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Column mapping helper
-  const findCol = (names: string[]): number => {
-    for (const name of names) {
-      const idx = headers.findIndex((h) =>
-        h.toLowerCase().includes(name.toLowerCase())
-      );
-      if (idx !== -1) return idx;
-    }
-    return -1;
-  };
-
   const colDate = 0;
-  const colChecking = findCol(["Checking"]);
-  const colSavings = findCol(["Savings"]);
-  const colHomeEquity = findCol(["Home Equity", "HomeEquity"]);
-  const col401k = findCol(["401K", "401k", "Retirement"]);
-  const colHsa = findCol(["HSA", "HRA"]);
-  const colInvestments = findCol(["Investment"]);
-  const col529 = findCol(["529"]);
-  const colTeamworks = findCol(["Teamworks"]);
-  const colMortgage = findCol(["Mortgage"]);
-  const colStudentLoans = findCol(["Student"]);
-  const colPersonalLoans = findCol(["Personal Loan", "PersonalLoan"]);
+  const colChecking = findCol(headers, "Checking");
+  const colSavings = findCol(headers, "Savings");
+  const colHomeEquity = findCol(headers, "Home Equity", "HomeEquity");
+  const col401k = findCol(headers, "401K", "401k", "Retirement");
+  const colHsa = findCol(headers, "HSA", "HRA");
+  const colInvestments = findCol(headers, "Investment");
+  const col529 = findCol(headers, "529");
+  const colTeamworks = findCol(headers, "Teamworks");
+  const colMortgage = findCol(headers, "Mortgage");
+  const colStudentLoans = findCol(headers, "Student");
+  const colPersonalLoans = findCol(headers, "Personal Loan", "PersonalLoan");
 
   let insertedCount = 0;
   const insertBatch = db.transaction((dataRows: Array<Array<number | string>>) => {
@@ -273,17 +337,8 @@ try {
       const rawDate = row[colDate];
       if (!rawDate || rawDate === 0 || rawDate === "Date") continue;
 
-      let dateStr: string;
-      if (typeof rawDate === "number" && rawDate > 40000) {
-        dateStr = excelDateToISO(rawDate);
-      } else if (typeof rawDate === "string" && rawDate.includes("/")) {
-        const parts = rawDate.split("/");
-        dateStr = `${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
-      } else if (typeof rawDate === "string" && rawDate.includes("-")) {
-        dateStr = rawDate;
-      } else {
-        continue;
-      }
+      const dateStr = parseDate(rawDate);
+      if (!dateStr) continue;
 
       const getVal = (col: number) => col >= 0 ? (Number(row[col]) || 0) : 0;
 
@@ -343,7 +398,6 @@ const m2 = insertMortgage.run(
 );
 
 const m1Id = m1.lastInsertRowid as number;
-const m2Id = m2.lastInsertRowid as number;
 
 // Extra payments for original mortgage
 const insertExtra = db.prepare(`
@@ -356,33 +410,237 @@ insertExtra.run(m1Id, "2026-02-01", 500, "Extra payment February 2026");
 
 console.log("✅ Inserted 2 mortgages + 3 extra payments");
 
-// ─── Seed Budget Data from Budget 2026.xlsx ────────────────────────────────────
-try {
-  const budgetPath = path.join(XLSX_BASE, "Budget 2026.xlsx");
-  const wb = XLSX.readFile(budgetPath);
+// ─── Parse a Budget YYYY.xlsx file ─────────────────────────────────────────────
 
-  const monthSheets: Record<string, string> = {
-    "January": "2026-01",
-    "February": "2026-02",
-    "March": "2026-03",
-  };
+interface ParsedTransaction {
+  date: string;
+  amount: number;
+  description: string;
+  category: string;
+}
 
-  const insertTx = db.prepare(`
-    INSERT INTO transactions (date, amount, description, category_id, week_label)
-    VALUES (?, ?, ?, ?, ?)
-  `);
+interface ParsedMonthData {
+  month: string; // YYYY-MM
+  predictedIncome: number;
+  charityCarryover: number;
+  transactions: ParsedTransaction[];
+  categoryTargets: Array<{ category: string; target: number }>;
+}
 
-  const insertMonthlyTarget = db.prepare(`
-    INSERT OR REPLACE INTO budget_monthly_targets (month, predicted_income, charity_bank_carryover)
-    VALUES (?, ?, ?)
-  `);
+/**
+ * Parse a single monthly sheet from a Budget xlsx workbook.
+ * Tries to auto-detect the header row and column layout.
+ */
+function parseMonthSheet(
+  sheet: XLSX.WorkSheet,
+  year: number,
+  monthNum: number
+): ParsedMonthData {
+  const monthStr = `${year}-${String(monthNum).padStart(2, "0")}`;
 
-  const insertCatTarget = db.prepare(`
-    INSERT OR REPLACE INTO budget_category_targets (month, category_id, target_amount)
-    VALUES (?, ?, ?)
-  `);
+  const rows = (XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+  }) as unknown) as Array<Array<string | number>>;
 
-  // Per-month actual transaction data based on spec
+  let predictedIncome = 0;
+  let charityCarryover = 0;
+  const transactions: ParsedTransaction[] = [];
+  const categoryTargets: Array<{ category: string; target: number }> = [];
+
+  // Scan early rows for metadata (Predicted Income, Charity Carryover)
+  for (let i = 0; i < Math.min(20, rows.length); i++) {
+    const row = rows[i];
+    const rowText = row.map((c) => String(c)).join(" ").toLowerCase();
+    if (rowText.includes("predicted income") || rowText.includes("expected income")) {
+      for (const cell of row) {
+        const n = parseAmount(cell);
+        if (n > 0) { predictedIncome = n; break; }
+      }
+    }
+    if (rowText.includes("charity") && (rowText.includes("carryover") || rowText.includes("carry"))) {
+      for (const cell of row) {
+        const n = parseAmount(cell);
+        if (n > 0) { charityCarryover = n; break; }
+      }
+    }
+  }
+
+  // Find the transaction header row: must contain "date" and either "amount" or "debit/credit"
+  let headerRowIdx = -1;
+  let colDate = -1, colAmount = -1, colDebit = -1, colCredit = -1;
+  let colDescription = -1, colCategory = -1, colTarget = -1;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const headers = row.map((c) => String(c).toLowerCase().trim());
+    const dateIdx = headers.findIndex((h) => h === "date" || h.includes("date"));
+    if (dateIdx === -1) continue;
+    // Also need at least one of: amount, debit, credit, payment
+    const amtIdx = headers.findIndex((h) =>
+      h === "amount" || h.includes("amount") || h === "payment" || h.includes("payment")
+    );
+    const debitIdx = headers.findIndex((h) => h === "debit" || h.includes("debit"));
+    const creditIdx = headers.findIndex((h) => h === "credit" || h.includes("credit"));
+
+    if (amtIdx !== -1 || debitIdx !== -1 || creditIdx !== -1) {
+      headerRowIdx = i;
+      colDate = dateIdx;
+      colAmount = amtIdx;
+      colDebit = debitIdx;
+      colCredit = creditIdx;
+      colDescription = headers.findIndex((h) =>
+        h === "description" || h === "note" || h === "memo" ||
+        h.includes("description") || h.includes("note") || h.includes("memo")
+      );
+      colCategory = headers.findIndex((h) =>
+        h === "category" || h.includes("category")
+      );
+      colTarget = headers.findIndex((h) =>
+        h === "target" || h === "budget" || h.includes("target") || h.includes("budget")
+      );
+      break;
+    }
+  }
+
+  if (headerRowIdx === -1) {
+    // No recognizable header found — return empty data
+    return { month: monthStr, predictedIncome, charityCarryover, transactions, categoryTargets };
+  }
+
+  // Parse data rows
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every((c) => !c && c !== 0)) continue;
+
+    const rawDate = colDate >= 0 ? row[colDate] : null;
+    const dateStr = parseDate(rawDate);
+
+    // If no date but we have category + target, treat as category target row
+    if (!dateStr) {
+      if (colCategory >= 0 && colTarget >= 0) {
+        const cat = String(row[colCategory] ?? "").trim();
+        const tgt = parseAmount(row[colTarget]);
+        if (cat && tgt > 0) {
+          categoryTargets.push({ category: cat, target: tgt });
+        }
+      }
+      continue;
+    }
+
+    // Determine amount
+    let amount = 0;
+    if (colAmount >= 0) {
+      amount = Math.abs(parseAmount(row[colAmount]));
+    } else if (colDebit >= 0 || colCredit >= 0) {
+      const debit = colDebit >= 0 ? parseAmount(row[colDebit]) : 0;
+      const credit = colCredit >= 0 ? parseAmount(row[colCredit]) : 0;
+      amount = Math.abs(debit || credit);
+    }
+    if (amount === 0) continue;
+
+    const description = colDescription >= 0 ? String(row[colDescription] ?? "").trim() : "";
+    const category = colCategory >= 0 ? String(row[colCategory] ?? "").trim() : "";
+
+    transactions.push({ date: dateStr, amount, description, category });
+  }
+
+  return { month: monthStr, predictedIncome, charityCarryover, transactions, categoryTargets };
+}
+
+/**
+ * Discover and parse all "Budget YYYY.xlsx" files in XLSX_BASE.
+ * Returns parsed data sorted by year (oldest first).
+ */
+function findBudgetFiles(): Array<{ year: number; filePath: string }> {
+  const files: Array<{ year: number; filePath: string }> = [];
+  try {
+    const entries = fs.readdirSync(XLSX_BASE);
+    for (const entry of entries) {
+      const m = entry.match(/^Budget\s+(\d{4})\.xlsx$/i);
+      if (m) {
+        files.push({ year: parseInt(m[1]), filePath: path.join(XLSX_BASE, entry) });
+      }
+    }
+  } catch {
+    // directory not readable
+  }
+  return files.sort((a, b) => a.year - b.year);
+}
+
+// ─── Seed Budget Data from all Budget YYYY.xlsx files ─────────────────────────
+
+const insertTx = db.prepare(`
+  INSERT INTO transactions (date, amount, description, category_id, week_label)
+  VALUES (?, ?, ?, ?, ?)
+`);
+
+const insertMonthlyTarget = db.prepare(`
+  INSERT OR REPLACE INTO budget_monthly_targets (month, predicted_income, charity_bank_carryover)
+  VALUES (?, ?, ?)
+`);
+
+const insertCatTarget = db.prepare(`
+  INSERT OR REPLACE INTO budget_category_targets (month, category_id, target_amount)
+  VALUES (?, ?, ?)
+`);
+
+const budgetFiles = findBudgetFiles();
+
+if (budgetFiles.length > 0) {
+  console.log(`📂 Found ${budgetFiles.length} Budget xlsx file(s): ${budgetFiles.map(f => path.basename(f.filePath)).join(", ")}`);
+
+  for (const { year, filePath } of budgetFiles) {
+    try {
+      const wb = XLSX.readFile(filePath);
+
+      for (const sheetName of wb.SheetNames) {
+        const monthNum = MONTH_NAMES[sheetName.toLowerCase()];
+        if (!monthNum) continue; // skip non-month sheets
+
+        const sheet = wb.Sheets[sheetName];
+        if (!sheet) continue;
+
+        const parsed = parseMonthSheet(sheet, year, monthNum);
+
+        // Insert monthly target
+        insertMonthlyTarget.run(parsed.month, parsed.predictedIncome, parsed.charityCarryover);
+
+        // Insert category targets
+        for (const ct of parsed.categoryTargets) {
+          const catId = findCategoryId(ct.category);
+          if (catId) insertCatTarget.run(parsed.month, catId, ct.target);
+        }
+
+        // Insert transactions
+        let txCount = 0;
+        const insertBatch = db.transaction(() => {
+          for (const tx of parsed.transactions) {
+            const catId = tx.category ? findCategoryId(tx.category) : null;
+            if (!catId) {
+              console.warn(`    ⚠️  Unknown category "${tx.category}" for transaction on ${tx.date}`);
+              continue;
+            }
+            const weekLabel = getISOWeek(tx.date);
+            insertTx.run(tx.date, tx.amount, tx.description, catId, weekLabel);
+            txCount++;
+          }
+        });
+        insertBatch();
+
+        console.log(`  ✅ ${year}/${sheetName}: ${txCount} transactions, ${parsed.categoryTargets.length} targets`);
+      }
+    } catch (err) {
+      console.warn(`⚠️  Could not parse ${path.basename(filePath)}:`, err);
+    }
+  }
+} else {
+  console.log("📂 No Budget YYYY.xlsx files found — seeding with built-in sample data for 2026");
+  seedFallback2026Data();
+}
+
+// ─── Fallback: built-in 2026 sample data ──────────────────────────────────────
+function seedFallback2026Data() {
   const MONTHLY_DATA: Record<string, {
     predictedIncome: number;
     charityCarryover: number;
@@ -411,42 +669,33 @@ try {
         { category: "Fun Money", target: 100 },
       ],
       transactions: [
-        // Income
         { date: "2026-01-15", amount: 8992.96, description: "Teamworks paycheck", category: "Teamworks" },
         { date: "2026-01-15", amount: 4031.83, description: "Riverview/SynergenX", category: "Riverview/SynergenX" },
         { date: "2026-01-20", amount: 4026.98, description: "Gifts/Other income", category: "Gifts/Other" },
-        // Housing
         { date: "2026-01-01", amount: 3993.23, description: "Mortgage payment", category: "Mortgage" },
         { date: "2026-01-15", amount: 635.78, description: "Water/Trash", category: "Water/Trash" },
         { date: "2026-01-20", amount: 120.00, description: "Cable/Internet", category: "Cable/Internet" },
-        // Insurance
         { date: "2026-01-05", amount: 64.38, description: "Auto & Life Insurance", category: "Auto & Life" },
-        // Transportation
         { date: "2026-01-10", amount: 46.18, description: "Gas", category: "Gas/Parking" },
-        // Food
         { date: "2026-01-07", amount: 198.45, description: "Groceries", category: "Groceries" },
         { date: "2026-01-14", amount: 196.51, description: "Groceries", category: "Groceries" },
         { date: "2026-01-21", amount: 201.85, description: "Groceries - HEB", category: "Groceries" },
         { date: "2026-01-10", amount: 87.42, description: "Restaurant", category: "Restaurants" },
         { date: "2026-01-17", amount: 156.88, description: "Restaurants", category: "Restaurants" },
         { date: "2026-01-24", amount: 260.63, description: "Restaurants", category: "Restaurants" },
-        // Personal
         { date: "2026-01-12", amount: 124.65, description: "Clothing", category: "Clothing" },
         { date: "2026-01-08", amount: 438.38, description: "Phone bill", category: "Phone" },
         { date: "2026-01-15", amount: 36.88, description: "Home improvement", category: "Home Improvement" },
         { date: "2026-01-20", amount: 249.52, description: "Fun money", category: "Fun Money" },
-        // Health
         { date: "2026-01-22", amount: 130.00, description: "Doctor visit", category: "Doctor Visits" },
-        // Giving
         { date: "2026-01-04", amount: 400.00, description: "Church offering", category: "Church Offering" },
         { date: "2026-01-11", amount: 192.03, description: "Charity", category: "Charity/Other" },
-        // Funds
         { date: "2026-01-31", amount: 10312.88, description: "Transfer to savings", category: "Savings/Emergency" },
       ],
     },
     "2026-02": {
       predictedIncome: 17000,
-      charityCarryover: 0, // Will be computed
+      charityCarryover: 0,
       categoryTargets: [
         { category: "Teamworks", target: 9000 },
         { category: "Riverview/SynergenX", target: 7000 },
@@ -464,28 +713,21 @@ try {
         { category: "Phone", target: 110.26 },
       ],
       transactions: [
-        // Income
         { date: "2026-02-14", amount: 8992.96, description: "Teamworks paycheck", category: "Teamworks" },
         { date: "2026-02-14", amount: 4031.83, description: "Riverview/SynergenX", category: "Riverview/SynergenX" },
         { date: "2026-02-20", amount: 4026.98, description: "Gifts/Other income", category: "Gifts/Other" },
-        // Housing
         { date: "2026-02-01", amount: 3993.23, description: "Mortgage payment", category: "Mortgage" },
         { date: "2026-02-10", amount: 180.00, description: "Water/Trash", category: "Water/Trash" },
         { date: "2026-02-15", amount: 120.00, description: "Cable/Internet", category: "Cable/Internet" },
-        // Insurance
         { date: "2026-02-05", amount: 48.36, description: "Auto & Life Insurance", category: "Auto & Life" },
-        // Food
         { date: "2026-02-07", amount: 180.22, description: "Groceries", category: "Groceries" },
         { date: "2026-02-14", amount: 205.33, description: "Groceries", category: "Groceries" },
         { date: "2026-02-21", amount: 190.88, description: "Groceries", category: "Groceries" },
         { date: "2026-02-08", amount: 95.77, description: "Restaurant", category: "Restaurants" },
         { date: "2026-02-15", amount: 145.62, description: "Restaurants", category: "Restaurants" },
-        // Personal
         { date: "2026-02-08", amount: 110.26, description: "Phone bill", category: "Phone" },
         { date: "2026-02-14", amount: 75.00, description: "Fun money", category: "Fun Money" },
-        // Giving
         { date: "2026-02-01", amount: 400.00, description: "Church offering", category: "Church Offering" },
-        // Funds
         { date: "2026-02-28", amount: 10454.76, description: "Transfer to savings", category: "Savings/Emergency" },
       ],
     },
@@ -510,56 +752,42 @@ try {
         { category: "Doctor Visits", target: 0 },
       ],
       transactions: [
-        // Income
         { date: "2026-03-14", amount: 13221.95, description: "Teamworks paycheck", category: "Teamworks" },
         { date: "2026-03-14", amount: 1085.10, description: "Riverview/SynergenX", category: "Riverview/SynergenX" },
         { date: "2026-03-20", amount: 2516.49, description: "Gifts/Other income", category: "Gifts/Other" },
-        // Housing
         { date: "2026-03-01", amount: 3993.23, description: "Mortgage payment", category: "Mortgage" },
         { date: "2026-03-10", amount: 410.97, description: "Water/Trash", category: "Water/Trash" },
         { date: "2026-03-05", amount: 567.73, description: "Propane", category: "Propane" },
         { date: "2026-03-15", amount: 120.00, description: "Cable/Internet", category: "Cable/Internet" },
-        // Insurance
         { date: "2026-03-05", amount: 48.36, description: "Auto & Life Insurance", category: "Auto & Life" },
-        // Food
         { date: "2026-03-07", amount: 168.44, description: "Groceries", category: "Groceries" },
         { date: "2026-03-14", amount: 185.23, description: "Groceries", category: "Groceries" },
         { date: "2026-03-21", amount: 179.11, description: "Groceries", category: "Groceries" },
         { date: "2026-03-10", amount: 89.23, description: "Restaurant", category: "Restaurants" },
         { date: "2026-03-18", amount: 122.44, description: "Restaurants", category: "Restaurants" },
-        // Personal
         { date: "2026-03-08", amount: 110.26, description: "Phone bill", category: "Phone" },
         { date: "2026-03-15", amount: 200.00, description: "Fun money", category: "Fun Money" },
-        // Health
         { date: "2026-03-15", amount: 447.95, description: "Doctor visit", category: "Doctor Visits" },
-        // Education
         { date: "2026-03-22", amount: 23.20, description: "Education", category: "Other" },
-        // Giving
         { date: "2026-03-01", amount: 400.00, description: "Church offering", category: "Church Offering" },
-        // Funds
         { date: "2026-03-31", amount: 6394.03, description: "Transfer to savings", category: "Savings/Emergency" },
       ],
     },
   };
 
   for (const [month, data] of Object.entries(MONTHLY_DATA)) {
-    // Insert monthly target
     insertMonthlyTarget.run(month, data.predictedIncome, data.charityCarryover);
 
-    // Insert category targets
     for (const ct of data.categoryTargets) {
-      const catId = catMap.get(ct.category);
-      if (catId) {
-        insertCatTarget.run(month, catId, ct.target);
-      }
+      const catId = findCategoryId(ct.category);
+      if (catId) insertCatTarget.run(month, catId, ct.target);
     }
 
-    // Insert transactions
     const insertBatch = db.transaction(() => {
       for (const tx of data.transactions) {
-        const catId = catMap.get(tx.category);
+        const catId = findCategoryId(tx.category);
         if (!catId) {
-          console.warn(`⚠️  Unknown category: ${tx.category}`);
+          console.warn(`  ⚠️  Unknown category: ${tx.category}`);
           continue;
         }
         const weekLabel = getISOWeek(tx.date);
@@ -568,10 +796,8 @@ try {
     });
     insertBatch();
 
-    console.log(`✅ Seeded ${month}: ${data.transactions.length} transactions`);
+    console.log(`  ✅ Seeded ${month}: ${data.transactions.length} transactions`);
   }
-} catch (err) {
-  console.warn("⚠️  Could not seed budget data:", err);
 }
 
 // ─── Seed App Settings ─────────────────────────────────────────────────────────

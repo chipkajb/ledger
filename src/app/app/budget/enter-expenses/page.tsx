@@ -17,6 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ExportButton } from "@/components/ui/export-button";
+import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, currentDate, getWeekLabel } from "@/lib/utils";
 import { format, startOfISOWeek, subWeeks } from "date-fns";
 
@@ -45,7 +47,7 @@ interface Transaction {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildWeekOptions(count = 12): string[] {
+function buildWeekOptions(count = 16): string[] {
   const today = new Date();
   const options: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -58,7 +60,7 @@ function buildWeekOptions(count = 12): string[] {
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function EnterExpensesPage() {
-  const weekOptions = buildWeekOptions(12);
+  const weekOptions = buildWeekOptions(16);
   const [selectedWeek, setSelectedWeek] = useState<string>(weekOptions[0]);
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -75,13 +77,11 @@ export default function EnterExpensesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Load categories once
   useEffect(() => {
     fetch("/api/budget/categories")
       .then((r) => r.json())
       .then((data: Category[]) => {
         setCategories(data);
-        // Default to first non-income category
         const first = data.find((c) => !c.isIncomeSource && !c.isFunds);
         if (first) setCategoryId(String(first.id));
       })
@@ -89,18 +89,20 @@ export default function EnterExpensesPage() {
       .finally(() => setLoadingCategories(false));
   }, []);
 
-  // Load transactions for selected week
-  useEffect(() => {
-    if (!selectedWeek) return;
+  function loadTransactions(week: string) {
     setLoadingTransactions(true);
-    fetch(`/api/budget/transactions?week=${encodeURIComponent(selectedWeek)}`)
+    fetch(`/api/budget/transactions?week=${encodeURIComponent(week)}`)
       .then((r) => r.json())
       .then((data: Transaction[]) => setTransactions(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoadingTransactions(false));
+  }
+
+  useEffect(() => {
+    if (!selectedWeek) return;
+    loadTransactions(selectedWeek);
   }, [selectedWeek]);
 
-  // Group categories for select
   const parentGroups = categories.reduce<Record<string, Category[]>>((acc, cat) => {
     const key = cat.parentCategory ?? "Other";
     if (!acc[key]) acc[key] = [];
@@ -110,6 +112,10 @@ export default function EnterExpensesPage() {
 
   const weeklyExpenses = transactions
     .filter((t) => !t.isIncomeSource)
+    .reduce((s, t) => s + t.amount, 0);
+
+  const weeklyIncome = transactions
+    .filter((t) => t.isIncomeSource)
     .reduce((s, t) => s + t.amount, 0);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -147,13 +153,7 @@ export default function EnterExpensesPage() {
       }
 
       await res.json();
-      // Re-fetch to get joined category name
-      const refreshed = await fetch(
-        `/api/budget/transactions?week=${encodeURIComponent(selectedWeek)}`
-      ).then((r) => r.json());
-      setTransactions(Array.isArray(refreshed) ? refreshed : []);
-
-      // Reset form except date
+      loadTransactions(selectedWeek);
       setAmount("");
       setDescription("");
     } catch (err) {
@@ -176,9 +176,25 @@ export default function EnterExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Enter Expenses</h1>
-        <p className="text-muted-foreground text-sm">Record transactions for a week</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Enter Expenses</h1>
+          <p className="text-muted-foreground text-sm">Record transactions for a week</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportDialog
+            apiUrl="/api/import/transactions"
+            title="Import Transactions"
+            description="Upload a CSV or Excel file. Expected columns: Date, Category, Description, Amount. Also supports Debit/Credit columns."
+            triggerLabel="Import CSV/XLSX"
+            onSuccess={() => loadTransactions(selectedWeek)}
+          />
+          <ExportButton
+            baseUrl="/api/export/transactions"
+            params={{ week: selectedWeek }}
+            label="Export Week"
+          />
+        </div>
       </div>
 
       {/* Week Selector */}
@@ -288,9 +304,16 @@ export default function EnterExpensesPage() {
             <CardTitle className="text-base">
               Transactions — {selectedWeek}
             </CardTitle>
-            <span className="text-sm font-semibold">
-              Total: {formatCurrency(weeklyExpenses)}
-            </span>
+            <div className="flex items-center gap-2 text-sm">
+              {weeklyIncome > 0 && (
+                <span className="text-green-600 font-medium text-xs">
+                  In: {formatCurrency(weeklyIncome)}
+                </span>
+              )}
+              <span className="font-semibold">
+                Out: {formatCurrency(weeklyExpenses)}
+              </span>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingTransactions ? (
@@ -306,13 +329,12 @@ export default function EnterExpensesPage() {
             ) : (
               <div className="divide-y">
                 {transactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between py-2 text-sm"
-                  >
+                  <div key={tx.id} className="flex items-center justify-between py-2 text-sm">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatCurrency(tx.amount)}</span>
+                        <span className={`font-medium ${tx.isIncomeSource ? "text-green-600" : ""}`}>
+                          {formatCurrency(tx.amount)}
+                        </span>
                         <span className="text-muted-foreground truncate">
                           {tx.categoryName}
                         </span>

@@ -34,12 +34,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ExportButton } from "@/components/ui/export-button";
+import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface MonthData {
-  month: string; // YYYY-MM
+  month: string;
   income: number;
   expenses: number;
   funds: number;
@@ -69,7 +71,7 @@ interface YearlyData {
 function buildYearOptions(): string[] {
   const now = new Date();
   const years: string[] = [];
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) {
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 10; y--) {
     years.push(String(y));
   }
   return years;
@@ -90,7 +92,6 @@ function categoryRowBg(target: number, actual: number): string {
 // ── YTD Category Table ─────────────────────────────────────────────────────
 
 function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] }) {
-  // Group by parent
   const parentGroups = categories.reduce<
     Record<string, { categories: YearlyCategoryTotal[]; total: number }>
   >((acc, cat) => {
@@ -189,18 +190,19 @@ export default function YearlyBudgetPage() {
   const [data, setData] = useState<YearlyData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  function loadData() {
     setLoading(true);
     fetch(`/api/budget/yearly?year=${selectedYear}`)
       .then((r) => r.json())
       .then((d: YearlyData) => setData(d))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [selectedYear]);
+  }
+
+  useEffect(() => { loadData(); }, [selectedYear]);
 
   const months = data?.months ?? [];
 
-  // Chart data
   const barChartData = months.map((m) => ({
     month: monthAbbr(m.month),
     Income: m.income,
@@ -212,7 +214,6 @@ export default function YearlyBudgetPage() {
     "Net Gain": m.netGain,
   }));
 
-  // Totals for the summary row
   const yearTotals = months.reduce(
     (acc, m) => ({
       income: acc.income + m.income,
@@ -229,18 +230,37 @@ export default function YearlyBudgetPage() {
           <h1 className="text-2xl font-bold">Yearly Budget</h1>
           <p className="text-sm text-muted-foreground">{selectedYear} overview</p>
         </div>
-        <Select value={selectedYear} onValueChange={setSelectedYear}>
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="Year" />
-          </SelectTrigger>
-          <SelectContent>
-            {yearOptions.map((y) => (
-              <SelectItem key={y} value={y}>
-                {y}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportDialog
+            apiUrl="/api/import/budget"
+            title="Import Budget File"
+            description={`Upload a Budget ${selectedYear}.xlsx file (or CSV). Each sheet should be named after a month. Columns: Date, Category, Description, Amount.`}
+            triggerLabel="Import Budget XLSX"
+            onSuccess={() => loadData()}
+          />
+          <ExportButton
+            baseUrl="/api/export/budget"
+            params={{ year: selectedYear }}
+            label="Export Budget"
+          />
+          <ExportButton
+            baseUrl="/api/export/transactions"
+            params={{ year: selectedYear }}
+            label="Export Transactions"
+          />
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {yearOptions.map((y) => (
+                <SelectItem key={y} value={y}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Month-by-month Net Gain Table */}
@@ -263,9 +283,7 @@ export default function YearlyBudgetPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="py-2 pl-4 pr-2 text-left font-medium text-muted-foreground w-28">
-                    Row
-                  </th>
+                  <th className="py-2 pl-4 pr-2 text-left font-medium text-muted-foreground w-28">Row</th>
                   {months.map((m) => (
                     <th key={m.month} className="py-2 px-2 text-right font-medium text-muted-foreground">
                       {monthAbbr(m.month)}
@@ -275,7 +293,6 @@ export default function YearlyBudgetPage() {
                 </tr>
               </thead>
               <tbody>
-                {/* Income row */}
                 <tr className="border-b hover:bg-muted/30">
                   <td className="py-2 pl-4 pr-2 font-medium">Income</td>
                   {months.map((m) => (
@@ -283,11 +300,8 @@ export default function YearlyBudgetPage() {
                       {m.income === 0 ? <span className="text-muted-foreground">—</span> : formatCurrency(m.income)}
                     </td>
                   ))}
-                  <td className="py-2 pl-2 pr-4 text-right font-semibold">
-                    {formatCurrency(yearTotals.income)}
-                  </td>
+                  <td className="py-2 pl-2 pr-4 text-right font-semibold">{formatCurrency(yearTotals.income)}</td>
                 </tr>
-                {/* Expenses row */}
                 <tr className="border-b hover:bg-muted/30">
                   <td className="py-2 pl-4 pr-2 font-medium">Expenses</td>
                   {months.map((m) => (
@@ -295,32 +309,20 @@ export default function YearlyBudgetPage() {
                       {m.expenses === 0 ? <span className="text-muted-foreground">—</span> : formatCurrency(m.expenses)}
                     </td>
                   ))}
-                  <td className="py-2 pl-2 pr-4 text-right font-semibold">
-                    {formatCurrency(yearTotals.expenses)}
-                  </td>
+                  <td className="py-2 pl-2 pr-4 text-right font-semibold">{formatCurrency(yearTotals.expenses)}</td>
                 </tr>
-                {/* Net Gain row */}
                 <tr className="hover:bg-muted/30">
                   <td className="py-2 pl-4 pr-2 font-semibold">Net Gain</td>
                   {months.map((m) => (
-                    <td
-                      key={m.month}
-                      className={`py-2 px-2 text-right font-medium ${
-                        m.netGain > 0
-                          ? "text-green-600"
-                          : m.netGain < 0
-                          ? "text-red-600"
-                          : "text-muted-foreground"
-                      }`}
-                    >
+                    <td key={m.month} className={`py-2 px-2 text-right font-medium ${
+                      m.netGain > 0 ? "text-green-600" : m.netGain < 0 ? "text-red-600" : "text-muted-foreground"
+                    }`}>
                       {m.netGain === 0 ? "—" : formatCurrency(m.netGain)}
                     </td>
                   ))}
-                  <td
-                    className={`py-2 pl-2 pr-4 text-right font-bold ${
-                      yearTotals.netGain >= 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
+                  <td className={`py-2 pl-2 pr-4 text-right font-bold ${
+                    yearTotals.netGain >= 0 ? "text-green-600" : "text-red-600"
+                  }`}>
                     {formatCurrency(yearTotals.netGain)}
                   </td>
                 </tr>
@@ -332,7 +334,6 @@ export default function YearlyBudgetPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Stacked Bar: Income vs Expenses */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Income vs Expenses by Month</CardTitle>
@@ -349,11 +350,7 @@ export default function YearlyBudgetPage() {
                 <BarChart data={barChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
-                    width={52}
-                  />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={52} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[2, 2, 0, 0]} stackId="a" />
@@ -364,7 +361,6 @@ export default function YearlyBudgetPage() {
           </CardContent>
         </Card>
 
-        {/* Line: Monthly Net Gain */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Net Gain per Month</CardTitle>
@@ -381,11 +377,7 @@ export default function YearlyBudgetPage() {
                 <LineChart data={lineChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
-                    width={52}
-                  />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={52} />
                   <Tooltip formatter={(v: number) => [formatCurrency(v), "Net Gain"]} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line
@@ -405,10 +397,16 @@ export default function YearlyBudgetPage() {
 
       {/* YTD Category Rollup */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">
             Year-to-Date Category Rollup — {selectedYear}
           </CardTitle>
+          <ExportButton
+            baseUrl="/api/export/budget"
+            params={{ year: selectedYear }}
+            label="Export"
+            size="sm"
+          />
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
