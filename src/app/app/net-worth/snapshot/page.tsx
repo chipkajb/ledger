@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, currentDate } from "@/lib/utils";
 
 interface SnapshotFormData {
   date: string;
-  // Assets
   checkingAccount: string;
   savingsAccount: string;
   homeEquity: string;
@@ -18,7 +18,6 @@ interface SnapshotFormData {
   investments: string;
   plan529: string;
   teamworksEquity: string;
-  // Liabilities
   mortgageBalance: string;
   studentLoans: string;
   personalLoans: string;
@@ -55,20 +54,21 @@ export default function NetWorthSnapshotPage() {
         const res = await fetch("/api/net-worth/latest");
         if (res.ok) {
           const data = await res.json();
-          if (data) {
+          const snap = data?.current ?? data; // support both { current } and direct snapshot
+          if (snap) {
             setForm({
               date: currentDate(),
-              checkingAccount: data.checkingAccount?.toString() ?? "",
-              savingsAccount: data.savingsAccount?.toString() ?? "",
-              homeEquity: data.homeEquity?.toString() ?? "",
-              retirement401k: data.retirement401k?.toString() ?? "",
-              hsaHra: data.hsaHra?.toString() ?? "",
-              investments: data.investments?.toString() ?? "",
-              plan529: data.plan529?.toString() ?? "",
-              teamworksEquity: data.teamworksEquity?.toString() ?? "",
-              mortgageBalance: data.mortgageBalance?.toString() ?? "",
-              studentLoans: data.studentLoans?.toString() ?? "",
-              personalLoans: data.personalLoans?.toString() ?? "",
+              checkingAccount: snap.checking?.toString() ?? snap.checkingAccount?.toString() ?? "",
+              savingsAccount: snap.savings?.toString() ?? snap.savingsAccount?.toString() ?? "",
+              homeEquity: snap.homeEquity?.toString() ?? "",
+              retirement401k: snap.retirement401k?.toString() ?? "",
+              hsaHra: snap.hsaHra?.toString() ?? "",
+              investments: snap.investments?.toString() ?? "",
+              plan529: snap.plan529?.toString() ?? "",
+              teamworksEquity: snap.teamworksEquity?.toString() ?? "",
+              mortgageBalance: snap.mortgageBalance?.toString() ?? "",
+              studentLoans: snap.studentLoans?.toString() ?? "",
+              personalLoans: snap.personalLoans?.toString() ?? "",
             });
           }
         }
@@ -152,11 +152,20 @@ export default function NetWorthSnapshotPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">New Net Worth Snapshot</h1>
-        <p className="text-muted-foreground">
-          Enter your current balances. Fields are pre-filled from your latest snapshot.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">New Net Worth Snapshot</h1>
+          <p className="text-muted-foreground">
+            Enter your current balances. Fields are pre-filled from your latest snapshot.
+          </p>
+        </div>
+        <ImportDialog
+          apiUrl="/api/import/net-worth"
+          title="Import Net Worth History"
+          description="Upload a CSV or Excel file with your historical net worth snapshots. Columns: Date, Checking, Savings, Home Equity, 401K, HSA/HRA, Investments, 529 Plan, Teamworks, Mortgage Balance, Student Loans, Personal Loans."
+          triggerLabel="Import Historical Data"
+          triggerVariant="outline"
+        />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -196,13 +205,9 @@ export default function NetWorthSnapshotPage() {
                 { label: "Teamworks Equity", field: "teamworksEquity" as const },
               ].map(({ label, field }) => (
                 <div key={field} className="flex items-center gap-3">
-                  <label className="w-44 shrink-0 text-sm text-muted-foreground">
-                    {label}
-                  </label>
+                  <label className="w-44 shrink-0 text-sm text-muted-foreground">{label}</label>
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      $
-                    </span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                     <Input
                       type="number"
                       step="0.01"
@@ -218,21 +223,17 @@ export default function NetWorthSnapshotPage() {
               <div className="border-t pt-3">
                 <div className="flex items-center justify-between font-semibold">
                   <span className="text-sm">Total Assets</span>
-                  <span className="text-green-600 dark:text-green-400">
-                    {formatCurrency(totalAssets)}
-                  </span>
+                  <span className="text-green-600 dark:text-green-400">{formatCurrency(totalAssets)}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Liabilities */}
+          {/* Liabilities + Net Worth */}
           <div className="space-y-6">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base text-red-600 dark:text-red-400">
-                  Liabilities
-                </CardTitle>
+                <CardTitle className="text-base text-red-600 dark:text-red-400">Liabilities</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
@@ -241,13 +242,9 @@ export default function NetWorthSnapshotPage() {
                   { label: "Personal Loans", field: "personalLoans" as const },
                 ].map(({ label, field }) => (
                   <div key={field} className="flex items-center gap-3">
-                    <label className="w-44 shrink-0 text-sm text-muted-foreground">
-                      {label}
-                    </label>
+                    <label className="w-44 shrink-0 text-sm text-muted-foreground">{label}</label>
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                        $
-                      </span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                       <Input
                         type="number"
                         step="0.01"
@@ -263,9 +260,7 @@ export default function NetWorthSnapshotPage() {
                 <div className="border-t pt-3">
                   <div className="flex items-center justify-between font-semibold">
                     <span className="text-sm">Total Liabilities</span>
-                    <span className="text-red-600 dark:text-red-400">
-                      {formatCurrency(totalLiabilities)}
-                    </span>
+                    <span className="text-red-600 dark:text-red-400">{formatCurrency(totalLiabilities)}</span>
                   </div>
                 </div>
               </CardContent>
@@ -277,26 +272,16 @@ export default function NetWorthSnapshotPage() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Total Assets</span>
-                    <span className="font-medium text-green-600 dark:text-green-400">
-                      {formatCurrency(totalAssets)}
-                    </span>
+                    <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(totalAssets)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Total Liabilities</span>
-                    <span className="font-medium text-red-600 dark:text-red-400">
-                      {formatCurrency(totalLiabilities)}
-                    </span>
+                    <span className="font-medium text-red-600 dark:text-red-400">{formatCurrency(totalLiabilities)}</span>
                   </div>
                   <div className="border-t pt-3">
                     <div className="flex justify-between">
                       <span className="text-lg font-bold">Net Worth</span>
-                      <span
-                        className={`text-xl font-bold ${
-                          netWorth >= 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
-                      >
+                      <span className={`text-xl font-bold ${netWorth >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                         {formatCurrency(netWorth)}
                       </span>
                     </div>
