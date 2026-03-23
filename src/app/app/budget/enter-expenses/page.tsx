@@ -11,9 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -70,6 +68,7 @@ export default function EnterExpensesPage() {
 
   // Form state
   const [formMonth, setFormMonth] = useState(currentMonth());
+  const [formGroup, setFormGroup] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -82,7 +81,10 @@ export default function EnterExpensesPage() {
       .then((data: Category[]) => {
         setCategories(data);
         const first = data.find((c) => !c.isIncomeSource && !c.isFunds);
-        if (first) setCategoryId(String(first.id));
+        if (first) {
+          setFormGroup(first.parentCategory);
+          setCategoryId(String(first.id));
+        }
       })
       .catch(console.error)
       .finally(() => setLoadingCategories(false));
@@ -109,6 +111,12 @@ export default function EnterExpensesPage() {
       acc[key].push(cat);
       return acc;
     }, {}), [categories]);
+
+  const groupKeys = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
+
+  const formCategoryOptions = useMemo(() =>
+    formGroup ? (parentGroups[formGroup] ?? []) : [],
+    [formGroup, parentGroups]);
 
   const monthlyExpenses = transactions
     .filter((t) => !t.isIncomeSource)
@@ -331,26 +339,47 @@ export default function EnterExpensesPage() {
                 />
               </div>
 
+              {/* Group */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Group</label>
+                {loadingCategories ? (
+                  <div className="h-9 animate-pulse rounded bg-muted" />
+                ) : (
+                  <Select
+                    value={formGroup}
+                    onValueChange={(v) => {
+                      setFormGroup(v);
+                      const first = parentGroups[v]?.[0];
+                      setCategoryId(first ? String(first.id) : "");
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groupKeys.map((g) => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
               {/* Category */}
               <div className="space-y-1">
                 <label className="text-sm font-medium">Category</label>
                 {loadingCategories ? (
                   <div className="h-9 animate-pulse rounded bg-muted" />
                 ) : (
-                  <Select value={categoryId} onValueChange={setCategoryId}>
+                  <Select value={categoryId} onValueChange={setCategoryId} disabled={!formGroup}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder={formGroup ? "Select category" : "Select a group first"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(parentGroups).map(([parent, cats]) => (
-                        <SelectGroup key={parent}>
-                          <SelectLabel>{parent}</SelectLabel>
-                          {cats.map((cat) => (
-                            <SelectItem key={cat.id} value={String(cat.id)}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
+                      {formCategoryOptions.map((cat) => (
+                        <SelectItem key={cat.id} value={String(cat.id)}>
+                          {cat.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

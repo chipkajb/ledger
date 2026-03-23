@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { budgetCategories, transactions } from "@/lib/db/schema";
-import { eq, asc, sql } from "drizzle-orm";
+import { budgetCategories, budgetCategoryTargets, transactions } from "@/lib/db/schema";
+import { eq, asc, sql, and } from "drizzle-orm";
 
 export async function GET() {
   const session = await auth();
@@ -68,6 +68,8 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
+  // Delete category-level monthly targets first (FK constraint)
+  await db.delete(budgetCategoryTargets).where(eq(budgetCategoryTargets.categoryId, parseInt(id)));
   await db.delete(budgetCategories).where(eq(budgetCategories.id, parseInt(id)));
   return NextResponse.json({ success: true });
 }

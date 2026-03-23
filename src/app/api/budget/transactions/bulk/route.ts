@@ -65,6 +65,16 @@ export async function POST(req: NextRequest) {
         .returning({ id: budgetCategories.id });
       resolvedCategoryId = created.id;
     }
+  } else {
+    // Verify the category exists
+    const found = await db
+      .select({ id: budgetCategories.id })
+      .from(budgetCategories)
+      .where(eq(budgetCategories.id, resolvedCategoryId))
+      .limit(1);
+    if (found.length === 0) {
+      return NextResponse.json({ error: `Category ${resolvedCategoryId} not found` }, { status: 400 });
+    }
   }
 
   // All transactions dated to the 1st of the month
@@ -79,7 +89,12 @@ export async function POST(req: NextRequest) {
     weekLabel,
   }));
 
-  await db.insert(transactions).values(rows);
+  try {
+    await db.insert(transactions).values(rows);
+  } catch (err) {
+    console.error("Bulk insert error:", err);
+    return NextResponse.json({ error: "Failed to insert transactions" }, { status: 500 });
+  }
 
   return NextResponse.json({ inserted: rows.length, categoryId: resolvedCategoryId }, { status: 201 });
 }

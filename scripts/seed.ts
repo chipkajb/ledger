@@ -253,22 +253,27 @@ const CATEGORIES = [
   { name: "Tuition", parent: "Education", sort: 110 },
 ];
 
-const insertCategory = db.prepare(`
-  INSERT OR IGNORE INTO budget_categories (name, parent_category, is_income_source, is_funds, sort_order)
-  VALUES (?, ?, ?, ?, ?)
-`);
+const existingCategoryCount = (db.prepare("SELECT COUNT(*) as cnt FROM budget_categories").get() as { cnt: number }).cnt;
 
-for (const cat of CATEGORIES) {
-  insertCategory.run(
-    cat.name,
-    cat.parent,
-    cat.isIncome ? 1 : 0,
-    cat.isFunds ? 1 : 0,
-    cat.sort
-  );
+if (existingCategoryCount === 0) {
+  const insertCategory = db.prepare(`
+    INSERT INTO budget_categories (name, parent_category, is_income_source, is_funds, sort_order)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  for (const cat of CATEGORIES) {
+    insertCategory.run(
+      cat.name,
+      cat.parent,
+      cat.isIncome ? 1 : 0,
+      cat.isFunds ? 1 : 0,
+      cat.sort
+    );
+  }
+  console.log(`✅ Inserted ${CATEGORIES.length} budget categories`);
+} else {
+  console.log(`⏭️  Skipping categories — ${existingCategoryCount} already exist`);
 }
-
-console.log(`✅ Inserted ${CATEGORIES.length} budget categories`);
 
 // Get category ID map
 const catRows = db.prepare("SELECT id, name FROM budget_categories").all() as Array<{id: number; name: string}>;
