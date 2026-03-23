@@ -18,6 +18,7 @@ import {
   LineChart,
   Calculator,
   Landmark,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -63,6 +64,11 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Amortization", href: "/app/mortgage/amortization", icon: <List className="h-4 w-4" /> },
       { label: "Extra Payments", href: "/app/mortgage/extra-payments", icon: <Calculator className="h-4 w-4" /> },
     ],
+  },
+  {
+    label: "Data Manager",
+    href: "/app/data",
+    icon: <Database className="h-4 w-4" />,
   },
   {
     label: "Settings",
