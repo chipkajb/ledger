@@ -5,6 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Lock, RefreshCw, Home, Trash2 } from "lucide-react";
 
@@ -386,17 +394,26 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {showResetConfirm ? (
-            <div className="space-y-3">
-              <p className="text-sm text-destructive font-medium">
-                Are you sure? This will delete all transactions, budget data, net worth snapshots, and mortgage data.
-              </p>
-              <div className="flex gap-3">
-                <Button
-                  variant="destructive"
-                  onClick={handleReset}
-                  disabled={resetting}
-                >
+          <Button
+            variant="destructive"
+            onClick={() => setShowResetConfirm(true)}
+          >
+            Clear All Data
+          </Button>
+
+          <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Are you absolutely sure?</DialogTitle>
+                <DialogDescription>
+                  This will permanently delete all transactions, budget data, net worth snapshots, and mortgage data. This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowResetConfirm(false)} disabled={resetting}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleReset} disabled={resetting}>
                   {resetting ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
@@ -406,19 +423,9 @@ export default function SettingsPage() {
                     "Yes, Delete Everything"
                   )}
                 </Button>
-                <Button variant="outline" onClick={() => setShowResetConfirm(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              variant="destructive"
-              onClick={() => setShowResetConfirm(true)}
-            >
-              Clear All Data
-            </Button>
-          )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
 

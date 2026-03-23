@@ -10,7 +10,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -27,7 +29,6 @@ import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import {
   formatCurrency,
-  formatPercent,
   currentMonth,
   isoToMonthLabel,
   monthsInYear,
@@ -43,28 +44,21 @@ interface CategorySummary {
   parentCategory: string;
   isIncomeSource: boolean;
   isFunds: boolean;
-  target: number;
   actual: number;
-  pctOfTarget: number | null;
-  difference: number;
 }
 
 interface ParentGroup {
   parentCategory: string;
-  target: number;
   actual: number;
   categories: CategorySummary[];
 }
 
 interface BudgetSummary {
   month: string;
-  predictedIncome: number;
   totalIncome: number;
   totalExpenses: number;
   totalFunds: number;
   netGain: number;
-  charityBankBalance: number;
-  charityBankCarryover: number;
   parentGroups: ParentGroup[];
   categories: CategorySummary[];
 }
@@ -92,47 +86,22 @@ interface Category {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildMonthOptions(): string[] {
+const START_YEAR = 2023;
+
+function buildMonthOptionsByYear(): Array<{ year: string; months: string[] }> {
   const now = new Date();
-  const options: string[] = [];
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) {
-    const months = monthsInYear(y).reverse();
-    for (const m of months) {
-      options.push(m);
-      if (options.length >= 60) return options;
+  const currentYear = now.getFullYear();
+  const result: Array<{ year: string; months: string[] }> = [];
+
+  for (let y = currentYear; y >= START_YEAR; y--) {
+    const maxMonth = y === currentYear ? now.getMonth() + 1 : 12;
+    const months: string[] = [];
+    for (let m = maxMonth; m >= 1; m--) {
+      months.push(`${y}-${String(m).padStart(2, "0")}`);
     }
+    if (months.length > 0) result.push({ year: String(y), months });
   }
-  return options;
-}
-
-function categoryRowBg(target: number, actual: number): string {
-  if (target === 0 && actual === 0) return "";
-  if (target === 0 && actual > 0) return "";
-  if (actual <= target) return "bg-green-50 dark:bg-green-950/30";
-  return "bg-red-50 dark:bg-red-950/30";
-}
-
-function displayActual(target: number, actual: number): string {
-  if (target === 0 && actual === 0) return "—";
-  return formatCurrency(actual);
-}
-
-function displayTarget(target: number, actual: number): string {
-  if (target === 0 && actual === 0) return "—";
-  if (target === 0) return "---";
-  return formatCurrency(target);
-}
-
-function displayPct(target: number, actual: number, pct: number | null): string {
-  if (target === 0 && actual === 0) return "—";
-  if (target === 0) return "---";
-  return formatPercent(pct);
-}
-
-function displayDiff(target: number, actual: number): string {
-  if (target === 0 && actual === 0) return "—";
-  if (target === 0) return "---";
-  return formatCurrency(actual - target);
+  return result;
 }
 
 // ── Category Table ─────────────────────────────────────────────────────────
@@ -143,10 +112,7 @@ function CategoryTable({ groups }: { groups: ParentGroup[] }) {
       <TableHeader>
         <TableRow>
           <TableHead className="w-[220px]">Category</TableHead>
-          <TableHead className="text-right">Target</TableHead>
           <TableHead className="text-right">Actual</TableHead>
-          <TableHead className="text-right">% of Target</TableHead>
-          <TableHead className="text-right">Difference</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -154,41 +120,13 @@ function CategoryTable({ groups }: { groups: ParentGroup[] }) {
           <>
             <TableRow key={`parent-${group.parentCategory}`} className="bg-muted/50 font-semibold">
               <TableCell className="py-1.5 text-sm">{group.parentCategory}</TableCell>
-              <TableCell className="py-1.5 text-right text-sm">{formatCurrency(group.target)}</TableCell>
               <TableCell className="py-1.5 text-right text-sm">{formatCurrency(group.actual)}</TableCell>
-              <TableCell className="py-1.5 text-right text-sm">
-                {group.target > 0 ? formatPercent((group.actual / group.target) * 100) : "—"}
-              </TableCell>
-              <TableCell className="py-1.5 text-right text-sm">
-                {group.target > 0 ? (
-                  <span className={group.actual - group.target > 0 ? "text-red-600" : "text-green-600"}>
-                    {formatCurrency(group.actual - group.target)}
-                  </span>
-                ) : "—"}
-              </TableCell>
             </TableRow>
             {group.categories.map((cat) => (
-              <TableRow key={`cat-${cat.id}`} className={categoryRowBg(cat.target, cat.actual)}>
+              <TableRow key={`cat-${cat.id}`}>
                 <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
                 <TableCell className="py-1.5 text-right text-sm">
-                  {displayTarget(cat.target, cat.actual)}
-                </TableCell>
-                <TableCell className="py-1.5 text-right text-sm">
-                  {displayActual(cat.target, cat.actual)}
-                </TableCell>
-                <TableCell className="py-1.5 text-right text-sm">
-                  {displayPct(cat.target, cat.actual, cat.pctOfTarget)}
-                </TableCell>
-                <TableCell className="py-1.5 text-right text-sm">
-                  {cat.target === 0 && cat.actual === 0
-                    ? "—"
-                    : cat.target === 0
-                    ? "---"
-                    : (
-                      <span className={cat.actual - cat.target > 0 ? "text-red-600" : "text-green-600"}>
-                        {displayDiff(cat.target, cat.actual)}
-                      </span>
-                    )}
+                  {cat.actual === 0 ? "—" : formatCurrency(cat.actual)}
                 </TableCell>
               </TableRow>
             ))}
@@ -332,7 +270,7 @@ function QuickAddTransaction({
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function MonthlyBudgetPage() {
-  const monthOptions = buildMonthOptions();
+  const monthOptionsByYear = buildMonthOptionsByYear();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
 
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
@@ -432,10 +370,15 @@ export default function MonthlyBudgetPage() {
               <SelectValue placeholder="Select month" />
             </SelectTrigger>
             <SelectContent>
-              {monthOptions.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {isoToMonthLabel(m)}
-                </SelectItem>
+              {monthOptionsByYear.map(({ year, months }) => (
+                <SelectGroup key={year}>
+                  <SelectLabel>{year}</SelectLabel>
+                  {months.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {isoToMonthLabel(m)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
@@ -444,23 +387,13 @@ export default function MonthlyBudgetPage() {
 
       {/* Summary Cards */}
       {loadingSummary ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
           ))}
         </div>
       ) : summary ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Predicted Income
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl font-bold">{formatCurrency(summary.predictedIncome)}</div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-1">
               <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -495,23 +428,6 @@ export default function MonthlyBudgetPage() {
           </Card>
         </div>
       ) : null}
-
-      {/* Charity Bank */}
-      {summary && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Charity Bank Balance</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center gap-4">
-            <div className="text-2xl font-bold">{formatCurrency(summary.charityBankBalance)}</div>
-            {summary.charityBankCarryover !== 0 && (
-              <p className="text-sm text-muted-foreground">
-                Carryover: {formatCurrency(summary.charityBankCarryover)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Category Tables */}
       {loadingSummary ? (

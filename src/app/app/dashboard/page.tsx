@@ -12,7 +12,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 import {
@@ -21,6 +20,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, currentMonth, isoToMonthLabel } from "@/lib/utils";
 
@@ -42,22 +50,17 @@ interface NetWorthLatest {
 
 interface BudgetSummary {
   month: string;
-  predictedIncome: number;
   totalIncome: number;
   totalExpenses: number;
   totalFunds: number;
   netGain: number;
-  charityBankBalance: number;
   categories: {
     id: number;
     name: string;
     parentCategory: string;
     isIncomeSource: boolean;
     isFunds: boolean;
-    target: number;
     actual: number;
-    pctOfTarget: number | null;
-    difference: number;
   }[];
 }
 
@@ -82,6 +85,26 @@ interface NetWorthSnapshot {
   id: number;
   snapshotDate: string;
   netWorth: number;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const START_YEAR = 2023;
+
+function buildMonthOptionsByYear(): Array<{ year: string; months: string[] }> {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const result: Array<{ year: string; months: string[] }> = [];
+
+  for (let y = currentYear; y >= START_YEAR; y--) {
+    const maxMonth = y === currentYear ? now.getMonth() + 1 : 12;
+    const months: string[] = [];
+    for (let m = maxMonth; m >= 1; m--) {
+      months.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+    if (months.length > 0) result.push({ year: String(y), months });
+  }
+  return result;
 }
 
 // ── Skeleton components ────────────────────────────────────────────────────
@@ -109,7 +132,8 @@ function SkeletonChart() {
 // ── Dashboard Page ─────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const month = currentMonth();
+  const monthOptionsByYear = buildMonthOptionsByYear();
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth());
 
   const [netWorthData, setNetWorthData] = useState<NetWorthLatest | null>(null);
   const [budgetData, setBudgetData] = useState<BudgetSummary | null>(null);
@@ -128,12 +152,6 @@ export default function DashboardPage() {
       .catch(console.error)
       .finally(() => setLoadingNetWorth(false));
 
-    fetch(`/api/budget/summary?month=${month}`)
-      .then((r) => r.json())
-      .then(setBudgetData)
-      .catch(console.error)
-      .finally(() => setLoadingBudget(false));
-
     fetch("/api/mortgage")
       .then((r) => r.json())
       .then(setMortgageData)
@@ -145,7 +163,16 @@ export default function DashboardPage() {
       .then((d) => setSnapshots((d.snapshots ?? []).reverse()))
       .catch(console.error)
       .finally(() => setLoadingSnapshots(false));
-  }, [month]);
+  }, []);
+
+  useEffect(() => {
+    setLoadingBudget(true);
+    fetch(`/api/budget/summary?month=${selectedMonth}`)
+      .then((r) => r.json())
+      .then(setBudgetData)
+      .catch(console.error)
+      .finally(() => setLoadingBudget(false));
+  }, [selectedMonth]);
 
   // ── Derived values ────────────────────────────────────────────────────
 
@@ -163,11 +190,9 @@ export default function DashboardPage() {
     .map((c) => ({
       name: c.name.length > 12 ? c.name.slice(0, 11) + "…" : c.name,
       Actual: c.actual,
-      Target: c.target,
     }));
 
   // Mortgage area chart: first 24 months of schedule from snapshots proxy
-  // We derive a simple amortization preview from active mortgage data
   const mortgageChartData: { month: string; Balance: number }[] = [];
   if (mortgageData?.active && mortgageSummary) {
     const rate = mortgageData.active.annualRate / 100 / 12;
@@ -191,13 +216,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">{isoToMonthLabel(month)}</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">{isoToMonthLabel(selectedMonth)}</p>
+        </div>
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Select month" />
+          </SelectTrigger>
+          <SelectContent>
+            {monthOptionsByYear.map(({ year, months }) => (
+              <SelectGroup key={year}>
+                <SelectLabel>{year}</SelectLabel>
+                {months.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {isoToMonthLabel(m)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* ── Summary Cards ── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
         {/* Net Worth */}
         {loadingNetWorth ? (
@@ -232,7 +276,7 @@ export default function DashboardPage() {
         ) : (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Budget This Month</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Budget — {isoToMonthLabel(selectedMonth)}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -275,23 +319,6 @@ export default function DashboardPage() {
                   Payoff: {mortgageSummary.payoffDate}
                 </p>
               )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Charity Bank Balance */}
-        {loadingBudget ? (
-          <SkeletonCard />
-        ) : (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Charity Bank</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {formatCurrency(budgetData?.charityBankBalance)}
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">Available to give</p>
             </CardContent>
           </Card>
         )}
@@ -371,8 +398,6 @@ export default function DashboardPage() {
                     width={48}
                   />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Target" fill="hsl(var(--muted-foreground))" opacity={0.4} radius={[2, 2, 0, 0]} />
                   <Bar dataKey="Actual" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
