@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/table";
 import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
-import { formatCurrency, formatPercent } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +46,6 @@ interface MonthData {
   expenses: number;
   funds: number;
   netGain: number;
-  predictedIncome: number;
   categoryBreakdown: Record<string, number>;
 }
 
@@ -80,13 +79,6 @@ function buildYearOptions(): string[] {
 function monthAbbr(yyyyMM: string): string {
   const [, m] = yyyyMM.split("-");
   return new Date(2000, parseInt(m) - 1, 1).toLocaleString("default", { month: "short" });
-}
-
-function categoryRowBg(target: number, actual: number): string {
-  if (target === 0 && actual === 0) return "";
-  if (target === 0) return "";
-  if (actual <= target) return "bg-green-50 dark:bg-green-950/30";
-  return "bg-red-50 dark:bg-red-950/30";
 }
 
 // ── YTD Category Table ─────────────────────────────────────────────────────
@@ -130,9 +122,6 @@ function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] })
         <TableRow>
           <TableHead className="w-[220px]">Category</TableHead>
           <TableHead className="text-right">YTD Actual</TableHead>
-          <TableHead className="text-right">Annual Target</TableHead>
-          <TableHead className="text-right">% of Target</TableHead>
-          <TableHead className="text-right">Difference</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -141,39 +130,15 @@ function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] })
             <TableRow key={`parent-${parent}`} className="bg-muted/50 font-semibold">
               <TableCell className="py-1.5 text-sm">{parent}</TableCell>
               <TableCell className="py-1.5 text-right text-sm">{formatCurrency(group.total)}</TableCell>
-              <TableCell className="py-1.5 text-right text-sm">—</TableCell>
-              <TableCell className="py-1.5 text-right text-sm">—</TableCell>
-              <TableCell className="py-1.5 text-right text-sm">—</TableCell>
             </TableRow>
-            {group.categories.map((cat) => {
-              const target = cat.budgetAmount ?? 0;
-              const pct = target > 0 ? (cat.total / target) * 100 : null;
-              const diff = cat.total - target;
-              return (
-                <TableRow
-                  key={`cat-${cat.categoryId}`}
-                  className={categoryRowBg(target, cat.total)}
-                >
-                  <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
-                  <TableCell className="py-1.5 text-right text-sm">
-                    {cat.total === 0 ? "—" : formatCurrency(cat.total)}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right text-sm">
-                    {target === 0 ? (cat.total > 0 ? "---" : "—") : formatCurrency(target)}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right text-sm">
-                    {target === 0 ? (cat.total > 0 ? "---" : "—") : formatPercent(pct)}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right text-sm">
-                    {target === 0 ? (cat.total > 0 ? "---" : "—") : (
-                      <span className={diff > 0 ? "text-red-600" : "text-green-600"}>
-                        {formatCurrency(diff)}
-                      </span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {group.categories.map((cat) => (
+              <TableRow key={`cat-${cat.categoryId}`}>
+                <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
+                <TableCell className="py-1.5 text-right text-sm">
+                  {cat.total === 0 ? "—" : formatCurrency(cat.total)}
+                </TableCell>
+              </TableRow>
+            ))}
           </>
         ))}
       </TableBody>
