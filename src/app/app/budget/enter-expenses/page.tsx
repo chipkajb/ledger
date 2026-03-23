@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -103,13 +103,6 @@ export default function EnterExpensesPage() {
     loadTransactions(selectedWeek);
   }, [selectedWeek]);
 
-  const parentGroups = categories.reduce<Record<string, Category[]>>((acc, cat) => {
-    const key = cat.parentCategory ?? "Other";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(cat);
-    return acc;
-  }, {});
-
   const weeklyExpenses = transactions
     .filter((t) => !t.isIncomeSource)
     .reduce((s, t) => s + t.amount, 0);
@@ -171,6 +164,107 @@ export default function EnterExpensesPage() {
       setTransactions((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete");
+    }
+  }
+
+  // ── Paste Row state ────────────────────────────────────────────────────────
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const [pasteMonth, setPasteMonth] = useState(currentMonth);
+  const [pasteGroup, setPasteGroup] = useState<string>("");
+  const [pasteCategoryId, setPasteCategoryId] = useState<string>("");
+  const [pasteNewGroup, setPasteNewGroup] = useState("");
+  const [pasteNewCategory, setPasteNewCategory] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const [pasteSubmitting, setPasteSubmitting] = useState(false);
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [pasteSuccess, setPasteSuccess] = useState<string | null>(null);
+
+  const NEW_SENTINEL = "__new__";
+
+  const parentGroups = useMemo(() =>
+    categories.reduce<Record<string, Category[]>>((acc, cat) => {
+      const key = cat.parentCategory ?? "Other";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(cat);
+      return acc;
+    }, {}), [categories]);
+
+  const pasteGroupOptions = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
+
+  const pasteCategoryOptions = useMemo(() =>
+    pasteGroup && pasteGroup !== NEW_SENTINEL ? (parentGroups[pasteGroup] ?? []) : [],
+    [pasteGroup, parentGroups]);
+
+  // Parse amounts from pasted text: splits on tabs, spaces, newlines; strips $, commas
+  const parsedAmounts = useMemo(() => {
+    if (!pasteText.trim()) return [];
+    return pasteText
+      .split(/[\t\n]+/)
+      .flatMap((chunk) => chunk.split(/\s{2,}/)) // split on 2+ spaces too
+      .map((s) => s.replace(/[$,\s]/g, "").replace(/^\((.+)\)$/, "-$1"))
+      .filter((s) => s !== "" && s !== "-")
+      .map((s) => parseFloat(s))
+      .filter((n) => !isNaN(n));
+  }, [pasteText]);
+
+  const pasteTotal = useMemo(() =>
+    parsedAmounts.reduce((s, n) => s + n, 0), [parsedAmounts]);
+
+  async function handlePasteSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPasteError(null);
+    setPasteSuccess(null);
+
+    if (parsedAmounts.length === 0) {
+      setPasteError("No valid amounts found. Paste tab-separated values from Excel.");
+      return;
+    }
+
+    const isNewGroup = pasteGroup === NEW_SENTINEL;
+    const isNewCategory = pasteCategoryId === NEW_SENTINEL;
+
+    if (isNewGroup && !pasteNewGroup.trim()) {
+      setPasteError("Enter a name for the new group.");
+      return;
+    }
+    if ((isNewGroup || isNewCategory) && !pasteNewCategory.trim()) {
+      setPasteError("Enter a name for the new category.");
+      return;
+    }
+    if (!isNewGroup && !isNewCategory && !pasteCategoryId) {
+      setPasteError("Select a category.");
+      return;
+    }
+
+    setPasteSubmitting(true);
+    try {
+      const body: Record<string, unknown> = { amounts: parsedAmounts, month: pasteMonth };
+      if (isNewGroup || isNewCategory) {
+        body.newParentCategory = isNewGroup ? pasteNewGroup.trim() : pasteGroup;
+        body.newCategoryName = pasteNewCategory.trim();
+      } else {
+        body.categoryId = parseInt(pasteCategoryId);
+      }
+
+      const res = await fetch("/api/budget/transactions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to import");
+      }
+
+      const { inserted } = await res.json();
+      setPasteSuccess(`${inserted} transaction${inserted !== 1 ? "s" : ""} added for ${pasteMonth}.`);
+      setPasteText("");
+      loadTransactions(selectedWeek);
+    } catch (err) {
+      setPasteError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setPasteSubmitting(false);
     }
   }
 
@@ -361,6 +455,176 @@ export default function EnterExpensesPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Paste Row Import */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Paste Row from Excel</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Copy a row of amounts from your Excel budget, pick the group and category, then paste and submit.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handlePasteSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {/* Month */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Month</label>
+                <input
+                  type="month"
+                  value={pasteMonth}
+                  onChange={(e) => setPasteMonth(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  required
+                />
+              </div>
+
+              {/* Group */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Group</label>
+                <Select
+                  value={pasteGroup}
+                  onValueChange={(v) => {
+                    setPasteGroup(v);
+                    setPasteCategoryId("");
+                    setPasteNewGroup("");
+                    setPasteNewCategory("");
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pasteGroupOptions.map((g) => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                    <SelectItem value={NEW_SENTINEL}>+ New group…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {pasteGroup === NEW_SENTINEL && (
+                  <input
+                    type="text"
+                    placeholder="New group name"
+                    value={pasteNewGroup}
+                    onChange={(e) => setPasteNewGroup(e.target.value)}
+                    className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    autoFocus
+                  />
+                )}
+              </div>
+
+              {/* Category */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Category</label>
+                {pasteGroup && pasteGroup !== NEW_SENTINEL ? (
+                  <>
+                    <Select
+                      value={pasteCategoryId}
+                      onValueChange={(v) => {
+                        setPasteCategoryId(v);
+                        setPasteNewCategory("");
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pasteCategoryOptions.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                        ))}
+                        <SelectItem value={NEW_SENTINEL}>+ New category…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {pasteCategoryId === NEW_SENTINEL && (
+                      <input
+                        type="text"
+                        placeholder="New category name"
+                        value={pasteNewCategory}
+                        onChange={(e) => setPasteNewCategory(e.target.value)}
+                        className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        autoFocus
+                      />
+                    )}
+                  </>
+                ) : pasteGroup === NEW_SENTINEL ? (
+                  <input
+                    type="text"
+                    placeholder="New category name"
+                    value={pasteNewCategory}
+                    onChange={(e) => setPasteNewCategory(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                ) : (
+                  <div className="flex h-9 items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                    Select a group first
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Paste Area */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Amounts{" "}
+                <span className="font-normal text-muted-foreground">
+                  — paste a row from Excel (tab-separated)
+                </span>
+              </label>
+              <textarea
+                rows={3}
+                placeholder={"$30.05\t$12.50\t-$60.00\t$142.83\t$46.99…"}
+                value={pasteText}
+                onChange={(e) => {
+                  setPasteText(e.target.value);
+                  setPasteError(null);
+                  setPasteSuccess(null);
+                }}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+
+            {/* Live Preview */}
+            {parsedAmounts.length > 0 && (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                <span className="font-medium">{parsedAmounts.length} amounts</span>
+                {" · total "}
+                <span className={`font-semibold ${pasteTotal < 0 ? "text-green-600" : ""}`}>
+                  {formatCurrency(pasteTotal)}
+                </span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {parsedAmounts.map((n, i) => (
+                    <span
+                      key={i}
+                      className={`rounded px-1.5 py-0.5 text-xs ${
+                        n < 0
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                          : "bg-background border border-border"
+                      }`}
+                    >
+                      {formatCurrency(n)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pasteError && <p className="text-sm text-red-600">{pasteError}</p>}
+            {pasteSuccess && <p className="text-sm text-green-600">{pasteSuccess}</p>}
+
+            <Button
+              type="submit"
+              disabled={pasteSubmitting || parsedAmounts.length === 0}
+              className="w-full sm:w-auto"
+            >
+              {pasteSubmitting
+                ? "Importing…"
+                : parsedAmounts.length > 0
+                ? `Import ${parsedAmounts.length} transaction${parsedAmounts.length !== 1 ? "s" : ""}`
+                : "Import"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
