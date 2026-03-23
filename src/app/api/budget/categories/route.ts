@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { budgetCategories } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { budgetCategories, transactions } from "@/lib/db/schema";
+import { eq, asc, sql } from "drizzle-orm";
 
 export async function GET() {
   const session = await auth();
@@ -43,4 +43,31 @@ export async function PATCH(req: NextRequest) {
     .returning();
 
   return NextResponse.json(cat);
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  const db = getDb();
+
+  // Check for associated transactions before deleting
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(eq(transactions.categoryId, parseInt(id)));
+
+  if (count > 0) {
+    return NextResponse.json(
+      { error: `Cannot delete: ${count} transaction${count !== 1 ? "s" : ""} use this category. Delete them first.` },
+      { status: 409 }
+    );
+  }
+
+  await db.delete(budgetCategories).where(eq(budgetCategories.id, parseInt(id)));
+  return NextResponse.json({ success: true });
 }

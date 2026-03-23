@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/select";
 import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
-import { formatCurrency, currentDate, getWeekLabel } from "@/lib/utils";
-import { format, startOfISOWeek, subWeeks } from "date-fns";
+import { formatCurrency, currentMonth, getWeekLabel, isoToMonthLabel } from "@/lib/utils";
+import { format, subMonths } from "date-fns";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -47,12 +47,11 @@ interface Transaction {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildWeekOptions(count = 16): string[] {
-  const today = new Date();
+function buildMonthOptions(count = 24): string[] {
   const options: string[] = [];
+  const now = new Date();
   for (let i = 0; i < count; i++) {
-    const weekStart = startOfISOWeek(subWeeks(today, i));
-    options.push(getWeekLabel(format(weekStart, "yyyy-MM-dd")));
+    options.push(format(subMonths(now, i), "yyyy-MM"));
   }
   return options;
 }
@@ -60,8 +59,8 @@ function buildWeekOptions(count = 16): string[] {
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function EnterExpensesPage() {
-  const weekOptions = buildWeekOptions(16);
-  const [selectedWeek, setSelectedWeek] = useState<string>(weekOptions[0]);
+  const monthOptions = buildMonthOptions(24);
+  const [selectedMonth, setSelectedMonth] = useState<string>(monthOptions[0]);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -70,7 +69,7 @@ export default function EnterExpensesPage() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   // Form state
-  const [date, setDate] = useState(currentDate());
+  const [formMonth, setFormMonth] = useState(currentMonth());
   const [categoryId, setCategoryId] = useState<string>("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -89,9 +88,9 @@ export default function EnterExpensesPage() {
       .finally(() => setLoadingCategories(false));
   }, []);
 
-  function loadTransactions(week: string) {
+  function loadTransactions(month: string) {
     setLoadingTransactions(true);
-    fetch(`/api/budget/transactions?week=${encodeURIComponent(week)}`)
+    fetch(`/api/budget/transactions?month=${encodeURIComponent(month)}`)
       .then((r) => r.json())
       .then((data: Transaction[]) => setTransactions(Array.isArray(data) ? data : []))
       .catch(console.error)
@@ -99,15 +98,23 @@ export default function EnterExpensesPage() {
   }
 
   useEffect(() => {
-    if (!selectedWeek) return;
-    loadTransactions(selectedWeek);
-  }, [selectedWeek]);
+    if (!selectedMonth) return;
+    loadTransactions(selectedMonth);
+  }, [selectedMonth]);
 
-  const weeklyExpenses = transactions
+  const parentGroups = useMemo(() =>
+    categories.reduce<Record<string, Category[]>>((acc, cat) => {
+      const key = cat.parentCategory ?? "Other";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(cat);
+      return acc;
+    }, {}), [categories]);
+
+  const monthlyExpenses = transactions
     .filter((t) => !t.isIncomeSource)
     .reduce((s, t) => s + t.amount, 0);
 
-  const weeklyIncome = transactions
+  const monthlyIncome = transactions
     .filter((t) => t.isIncomeSource)
     .reduce((s, t) => s + t.amount, 0);
 
@@ -115,8 +122,8 @@ export default function EnterExpensesPage() {
     e.preventDefault();
     setFormError(null);
 
-    if (!date || !categoryId || !amount) {
-      setFormError("Date, category, and amount are required.");
+    if (!formMonth || !categoryId || !amount) {
+      setFormError("Month, category, and amount are required.");
       return;
     }
 
@@ -128,6 +135,7 @@ export default function EnterExpensesPage() {
 
     setSubmitting(true);
     try {
+      const date = `${formMonth}-01`;
       const res = await fetch("/api/budget/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,7 +144,7 @@ export default function EnterExpensesPage() {
           categoryId: parseInt(categoryId),
           amount: amountNum,
           description: description.trim() || null,
-          weekLabel: selectedWeek,
+          weekLabel: getWeekLabel(date),
         }),
       });
 
@@ -146,7 +154,10 @@ export default function EnterExpensesPage() {
       }
 
       await res.json();
-      loadTransactions(selectedWeek);
+      // Reload if the submitted month matches the viewed month
+      if (formMonth === selectedMonth) {
+        loadTransactions(selectedMonth);
+      }
       setAmount("");
       setDescription("");
     } catch (err) {
@@ -168,8 +179,7 @@ export default function EnterExpensesPage() {
   }
 
   // ── Paste Row state ────────────────────────────────────────────────────────
-  const currentMonth = format(new Date(), "yyyy-MM");
-  const [pasteMonth, setPasteMonth] = useState(currentMonth);
+  const [pasteMonth, setPasteMonth] = useState(currentMonth());
   const [pasteGroup, setPasteGroup] = useState<string>("");
   const [pasteCategoryId, setPasteCategoryId] = useState<string>("");
   const [pasteNewGroup, setPasteNewGroup] = useState("");
@@ -181,26 +191,17 @@ export default function EnterExpensesPage() {
 
   const NEW_SENTINEL = "__new__";
 
-  const parentGroups = useMemo(() =>
-    categories.reduce<Record<string, Category[]>>((acc, cat) => {
-      const key = cat.parentCategory ?? "Other";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(cat);
-      return acc;
-    }, {}), [categories]);
-
   const pasteGroupOptions = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
 
   const pasteCategoryOptions = useMemo(() =>
     pasteGroup && pasteGroup !== NEW_SENTINEL ? (parentGroups[pasteGroup] ?? []) : [],
     [pasteGroup, parentGroups]);
 
-  // Parse amounts from pasted text: splits on tabs, spaces, newlines; strips $, commas
   const parsedAmounts = useMemo(() => {
     if (!pasteText.trim()) return [];
     return pasteText
       .split(/[\t\n]+/)
-      .flatMap((chunk) => chunk.split(/\s{2,}/)) // split on 2+ spaces too
+      .flatMap((chunk) => chunk.split(/\s{2,}/))
       .map((s) => s.replace(/[$,\s]/g, "").replace(/^\((.+)\)$/, "-$1"))
       .filter((s) => s !== "" && s !== "-")
       .map((s) => parseFloat(s))
@@ -258,9 +259,11 @@ export default function EnterExpensesPage() {
       }
 
       const { inserted } = await res.json();
-      setPasteSuccess(`${inserted} transaction${inserted !== 1 ? "s" : ""} added for ${pasteMonth}.`);
+      setPasteSuccess(`${inserted} transaction${inserted !== 1 ? "s" : ""} added for ${isoToMonthLabel(pasteMonth)}.`);
       setPasteText("");
-      loadTransactions(selectedWeek);
+      if (pasteMonth === selectedMonth) {
+        loadTransactions(selectedMonth);
+      }
     } catch (err) {
       setPasteError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -273,7 +276,7 @@ export default function EnterExpensesPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Enter Expenses</h1>
-          <p className="text-muted-foreground text-sm">Record transactions for a week</p>
+          <p className="text-muted-foreground text-sm">Record transactions by month</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ImportDialog
@@ -281,27 +284,27 @@ export default function EnterExpensesPage() {
             title="Import Transactions"
             description="Upload a CSV or Excel file. Expected columns: Date, Category, Description, Amount. Also supports Debit/Credit columns."
             triggerLabel="Import CSV/XLSX"
-            onSuccess={() => loadTransactions(selectedWeek)}
+            onSuccess={() => loadTransactions(selectedMonth)}
           />
           <ExportButton
             baseUrl="/api/export/transactions"
-            params={{ week: selectedWeek }}
-            label="Export Week"
+            params={{ month: selectedMonth }}
+            label="Export Month"
           />
         </div>
       </div>
 
-      {/* Week Selector */}
+      {/* Month Selector */}
       <div className="flex items-center gap-4">
-        <label className="text-sm font-medium">Week</label>
-        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Select week" />
+        <label className="text-sm font-medium">Viewing Month</label>
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Select month" />
           </SelectTrigger>
           <SelectContent>
-            {weekOptions.map((w) => (
-              <SelectItem key={w} value={w}>
-                {w}
+            {monthOptions.map((m) => (
+              <SelectItem key={m} value={m}>
+                {isoToMonthLabel(m)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -316,13 +319,13 @@ export default function EnterExpensesPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Date */}
+              {/* Month */}
               <div className="space-y-1">
-                <label className="text-sm font-medium">Date</label>
+                <label className="text-sm font-medium">Month</label>
                 <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  type="month"
+                  value={formMonth}
+                  onChange={(e) => setFormMonth(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   required
                 />
@@ -396,16 +399,16 @@ export default function EnterExpensesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base">
-              Transactions — {selectedWeek}
+              {isoToMonthLabel(selectedMonth)}
             </CardTitle>
             <div className="flex items-center gap-2 text-sm">
-              {weeklyIncome > 0 && (
+              {monthlyIncome > 0 && (
                 <span className="text-green-600 font-medium text-xs">
-                  In: {formatCurrency(weeklyIncome)}
+                  In: {formatCurrency(monthlyIncome)}
                 </span>
               )}
               <span className="font-semibold">
-                Out: {formatCurrency(weeklyExpenses)}
+                Out: {formatCurrency(monthlyExpenses)}
               </span>
             </div>
           </CardHeader>
@@ -418,7 +421,7 @@ export default function EnterExpensesPage() {
               </div>
             ) : transactions.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No transactions for this week yet.
+                No transactions for this month yet.
               </p>
             ) : (
               <div className="divide-y">
@@ -433,12 +436,11 @@ export default function EnterExpensesPage() {
                           {tx.categoryName}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{tx.date}</span>
-                        {tx.description && (
-                          <span className="truncate">{tx.description}</span>
-                        )}
-                      </div>
+                      {tx.description && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {tx.description}
+                        </div>
+                      )}
                     </div>
                     <Button
                       variant="ghost"
