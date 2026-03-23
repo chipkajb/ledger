@@ -42,8 +42,6 @@ interface Category {
   id: number;
   name: string;
   parentCategory: string;
-  budgetAmount: number | null;
-  budgetPct: number | null;
   isIncomeSource: boolean;
   isFunds: boolean;
   sortOrder: number;
@@ -448,7 +446,6 @@ function CategoriesTab({
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editGroup, setEditGroup] = useState("");
-  const [editBudget, setEditBudget] = useState("");
   const [editSort, setEditSort] = useState("");
   const [editIsIncome, setEditIsIncome] = useState(false);
   const [editIsFunds, setEditIsFunds] = useState(false);
@@ -458,7 +455,6 @@ function CategoriesTab({
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addGroup, setAddGroup] = useState("");
-  const [addBudget, setAddBudget] = useState("");
   const [addSort, setAddSort] = useState("");
   const [addIsIncome, setAddIsIncome] = useState(false);
   const [addIsFunds, setAddIsFunds] = useState(false);
@@ -487,7 +483,6 @@ function CategoriesTab({
     setEditId(c.id);
     setEditName(c.name);
     setEditGroup(c.parentCategory);
-    setEditBudget(c.budgetAmount != null ? String(c.budgetAmount) : "");
     setEditSort(String(c.sortOrder));
     setEditIsIncome(c.isIncomeSource);
     setEditIsFunds(c.isFunds);
@@ -510,7 +505,6 @@ function CategoriesTab({
           id,
           name: editName.trim(),
           parentCategory: editGroup.trim(),
-          budgetAmount: editBudget ? parseFloat(editBudget) : null,
           sortOrder: editSort ? parseInt(editSort) : 0,
           isIncomeSource: editIsIncome,
           isFunds: editIsFunds,
@@ -553,7 +547,6 @@ function CategoriesTab({
         body: JSON.stringify({
           name: addName.trim(),
           parentCategory: addGroup.trim(),
-          budgetAmount: addBudget ? parseFloat(addBudget) : null,
           sortOrder: addSort ? parseInt(addSort) : 0,
           isIncomeSource: addIsIncome,
           isFunds: addIsFunds,
@@ -561,7 +554,7 @@ function CategoriesTab({
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed to add");
       setAddOpen(false);
-      setAddName(""); setAddGroup(""); setAddBudget(""); setAddSort("");
+      setAddName(""); setAddGroup(""); setAddSort("");
       setAddIsIncome(false); setAddIsFunds(false);
       onRefresh();
     } catch (e) {
@@ -596,7 +589,6 @@ function CategoriesTab({
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Name</th>
                     <th className="px-3 py-2 text-left font-medium">Group</th>
-                    <th className="px-3 py-2 text-right font-medium">Budget</th>
                     <th className="px-3 py-2 text-center font-medium">Sort</th>
                     <th className="px-3 py-2 text-center font-medium">Type</th>
                     <th className="px-3 py-2 text-center font-medium w-20">Actions</th>
@@ -623,17 +615,6 @@ function CategoriesTab({
                           <datalist id="group-datalist">
                             {existingGroups.map((g) => <option key={g} value={g} />)}
                           </datalist>
-                        </td>
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={editBudget}
-                            onChange={(e) => setEditBudget(e.target.value)}
-                            placeholder="—"
-                            className="h-7 w-24 rounded border border-input bg-background px-2 text-sm text-right focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
                         </td>
                         <td className="px-2 py-1">
                           <input
@@ -671,9 +652,6 @@ function CategoriesTab({
                       <tr key={cat.id} className="border-t hover:bg-muted/30">
                         <td className="px-3 py-2 font-medium">{cat.name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{cat.parentCategory}</td>
-                        <td className="px-3 py-2 text-right">
-                          {cat.budgetAmount != null ? formatCurrency(cat.budgetAmount) : <span className="text-muted-foreground">—</span>}
-                        </td>
                         <td className="px-3 py-2 text-center text-muted-foreground">{cat.sortOrder}</td>
                         <td className="px-3 py-2 text-center text-xs text-muted-foreground">
                           {cat.isIncomeSource ? "Income" : cat.isFunds ? "Funds" : "Expense"}
@@ -729,29 +707,15 @@ function CategoriesTab({
                 </datalist>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Monthly Budget ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={addBudget}
-                  onChange={(e) => setAddBudget(e.target.value)}
-                  placeholder="Optional"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Sort Order</label>
-                <input
-                  type="number"
-                  value={addSort}
-                  onChange={(e) => setAddSort(e.target.value)}
-                  placeholder="0"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Sort Order</label>
+              <input
+                type="number"
+                value={addSort}
+                onChange={(e) => setAddSort(e.target.value)}
+                placeholder="0"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
             </div>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer text-sm">

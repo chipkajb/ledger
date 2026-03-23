@@ -211,54 +211,57 @@ const MONTH_NAMES: Record<string, number> = {
 const CATEGORIES = [
   // Income
   { name: "Teamworks", parent: "Income", isIncome: true, sort: 10 },
-  { name: "Riverview/SynergenX", parent: "Income", isIncome: true, sort: 11 },
+  { name: "Riverview", parent: "Income", isIncome: true, sort: 11 },
   { name: "Gifts/Other", parent: "Income", isIncome: true, sort: 12 },
   // Funds
   { name: "Savings/Emergency", parent: "Funds", isFunds: true, sort: 20 },
   // Giving
-  { name: "Church Offering", parent: "Giving", budgetAmount: 850, sort: 30 },
-  { name: "Charity/Other", parent: "Giving", budgetAmount: 500, sort: 31 },
-  { name: "Hospitality", parent: "Giving", budgetAmount: 350, sort: 32 },
+  { name: "Church Offering", parent: "Giving", sort: 30 },
+  { name: "Charity/Other", parent: "Giving", sort: 31 },
+  { name: "Hospitality", parent: "Giving", sort: 32 },
   // Housing
-  { name: "Mortgage", parent: "Housing", budgetAmount: 3993.23, sort: 40 },
-  { name: "Water/Trash", parent: "Housing", budgetAmount: 200, sort: 41 },
-  { name: "Propane", parent: "Housing", budgetAmount: 100, sort: 42 },
-  { name: "Electricity", parent: "Housing", budgetAmount: 0, sort: 43 },
-  { name: "Cable/Internet", parent: "Housing", budgetAmount: 120, sort: 44 },
+  { name: "Mortgage", parent: "Housing", sort: 40 },
+  { name: "Water", parent: "Housing", sort: 41 },
+  { name: "Trash", parent: "Housing", sort: 42 },
+  { name: "Propane", parent: "Housing", sort: 43 },
+  { name: "Electricity", parent: "Housing", sort: 44 },
+  { name: "Cable/Internet", parent: "Housing", sort: 45 },
+  { name: "Natural Gas", parent: "Housing", sort: 46 },
   // Insurance
-  { name: "Auto & Life", parent: "Insurance", budgetAmount: 48.36, sort: 50 },
+  { name: "Auto", parent: "Insurance", sort: 50 },
+  { name: "Life", parent: "Insurance", sort: 51 },
   // Transportation
-  { name: "Gas/Parking", parent: "Transportation", budgetAmount: 150, sort: 60 },
-  { name: "Maintenance", parent: "Transportation", budgetAmount: 50, sort: 61 },
+  { name: "Gas", parent: "Transportation", sort: 60 },
+  { name: "Parking", parent: "Transportation", sort: 61 },
+  { name: "Maintenance", parent: "Transportation", sort: 62 },
   // Food
-  { name: "Groceries", parent: "Food", budgetAmount: 350, sort: 70 },
-  { name: "Restaurants", parent: "Food", budgetAmount: 200, sort: 71 },
+  { name: "Groceries", parent: "Food", sort: 70 },
+  { name: "Restaurants", parent: "Food", sort: 71 },
   // Personal
-  { name: "Clothing", parent: "Personal", budgetAmount: 50, sort: 80 },
-  { name: "Phone", parent: "Personal", budgetAmount: 110.26, sort: 81 },
-  { name: "Home Improvement", parent: "Personal", budgetAmount: 50, sort: 82 },
-  { name: "Furniture", parent: "Personal", budgetAmount: 0, sort: 83 },
-  { name: "Travel/Entertainment", parent: "Personal", budgetAmount: 0, sort: 84 },
-  { name: "Fun Money", parent: "Personal", budgetAmount: 0, sort: 85 },
+  { name: "Clothing", parent: "Personal", sort: 80 },
+  { name: "Phone", parent: "Personal", sort: 81 },
+  { name: "Home Improvement", parent: "Personal", sort: 82 },
+  { name: "Furniture", parent: "Personal", sort: 83 },
+  { name: "Travel/Entertainment", parent: "Personal", sort: 84 },
+  { name: "Fun Money / Other", parent: "Personal", sort: 85 },
   // Health
-  { name: "Doctor Visits", parent: "Health", budgetAmount: 0, sort: 90 },
-  { name: "Dog", parent: "Health", budgetAmount: 0, sort: 91 },
+  { name: "Doctor Visits", parent: "Health", sort: 90 },
+  { name: "Dog", parent: "Health", sort: 91 },
   // Debt
-  { name: "Car Payment", parent: "Debt", budgetAmount: 0, sort: 100 },
+  { name: "Car Payment", parent: "Debt", sort: 100 },
   // Education
-  { name: "Other", parent: "Education", budgetAmount: 0, sort: 110 },
+  { name: "Tuition", parent: "Education", sort: 110 },
 ];
 
 const insertCategory = db.prepare(`
-  INSERT OR IGNORE INTO budget_categories (name, parent_category, budget_amount, is_income_source, is_funds, sort_order)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT OR IGNORE INTO budget_categories (name, parent_category, is_income_source, is_funds, sort_order)
+  VALUES (?, ?, ?, ?, ?)
 `);
 
 for (const cat of CATEGORIES) {
   insertCategory.run(
     cat.name,
     cat.parent,
-    cat.budgetAmount ?? null,
     cat.isIncome ? 1 : 0,
     cat.isFunds ? 1 : 0,
     cat.sort
