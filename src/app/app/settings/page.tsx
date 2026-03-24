@@ -54,6 +54,8 @@ export default function SettingsPage() {
   // Reset state
   const [resetting, setResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [showMortgageConfirm, setShowMortgageConfirm] = useState(false);
 
   useEffect(() => {
     async function loadMortgage() {
@@ -84,8 +86,13 @@ export default function SettingsPage() {
     loadMortgage();
   }, []);
 
-  async function handleMortgageSubmit(e: React.FormEvent) {
+  function handleMortgageSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setShowMortgageConfirm(true);
+  }
+
+  async function confirmMortgageSave() {
+    setShowMortgageConfirm(false);
     const payload = {
       label: "Mortgage",
       housePrice: parseFloat(housePrice),
@@ -151,7 +158,7 @@ export default function SettingsPage() {
     }
   }
 
-  async function handlePasswordChange(e: React.FormEvent) {
+  function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       toast.error("Passwords do not match");
@@ -161,6 +168,11 @@ export default function SettingsPage() {
       toast.error("Password must be at least 8 characters");
       return;
     }
+    setShowPasswordConfirm(true);
+  }
+
+  async function confirmPasswordChange() {
+    setShowPasswordConfirm(false);
     setLoading(true);
     try {
       const res = await fetch("/api/settings/password", {
@@ -428,6 +440,48 @@ export default function SettingsPage() {
           </Dialog>
         </CardContent>
       </Card>
+
+      {/* Password Confirmation Dialog */}
+      <Dialog open={showPasswordConfirm} onOpenChange={setShowPasswordConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Password Change</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to update your password? You will use the new password on your next login.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPasswordConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmPasswordChange} disabled={loading}>
+              Yes, Update Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mortgage Confirmation Dialog */}
+      <Dialog open={showMortgageConfirm} onOpenChange={setShowMortgageConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Mortgage {existingMortgage ? "Update" : "Save"}</DialogTitle>
+            <DialogDescription>
+              {existingMortgage
+                ? "This will update your mortgage configuration and recalculate the amortization schedule. Continue?"
+                : "This will save your new mortgage configuration. Continue?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMortgageConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmMortgageSave} disabled={mortgageSaving}>
+              {mortgageSaving ? "Saving…" : "Yes, Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

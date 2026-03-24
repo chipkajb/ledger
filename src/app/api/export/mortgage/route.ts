@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
       monthlyEscrow: mortgage.monthlyEscrow,
       pmi: mortgage.pmi,
       housePrice: mortgage.housePrice,
+      downPayment: mortgage.downPayment,
     },
     extraPayments.map((ep) => ({ paymentDate: ep.paymentDate, amount: ep.amount }))
   );

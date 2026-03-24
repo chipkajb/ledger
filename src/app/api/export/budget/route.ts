@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { transactions, budgetCategories, budgetMonthlyTargets, budgetCategoryTargets } from "@/lib/db/schema";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { and, gte, lte, desc } from "drizzle-orm";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";

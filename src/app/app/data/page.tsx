@@ -20,8 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatCurrency, isoToMonthLabel, currentMonth, getWeekLabel } from "@/lib/utils";
-import { format, subMonths } from "date-fns";
+import { formatCurrency, isoToMonthLabel, currentMonth } from "@/lib/utils";
 import { Pencil, Trash2, Plus, Check, X } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -47,15 +46,7 @@ interface Category {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function buildMonthOptions(count = 36): string[] {
-  const opts: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < count; i++) opts.push(format(subMonths(now, i), "yyyy-MM"));
-  return opts;
-}
-
 const ALL = "__all__";
-const monthOptions = buildMonthOptions(36);
 
 // ─── Transactions Tab ──────────────────────────────────────────────────────
 
@@ -124,7 +115,7 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
   function toggleSelect(id: number) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
   }
@@ -873,6 +864,172 @@ function CategoriesTab({
   );
 }
 
+// ─── Net Worth Fields Tab ──────────────────────────────────────────────────
+
+const NW_FIELDS = [
+  { key: "checking", defaultLabel: "Checking Account", type: "Asset" },
+  { key: "savings", defaultLabel: "Savings Account", type: "Asset" },
+  { key: "homeEquity", defaultLabel: "Home Equity", type: "Asset" },
+  { key: "retirement401k", defaultLabel: "401K / Retirement", type: "Asset" },
+  { key: "hsaHra", defaultLabel: "HSA / HRA", type: "Asset" },
+  { key: "investments", defaultLabel: "Investments", type: "Asset" },
+  { key: "plan529", defaultLabel: "529 Plan", type: "Asset" },
+  { key: "teamworksEquity", defaultLabel: "Teamworks Equity", type: "Asset" },
+  { key: "mortgageBalance", defaultLabel: "Mortgage Balance", type: "Liability" },
+  { key: "studentLoans", defaultLabel: "Student Loans", type: "Liability" },
+  { key: "personalLoans", defaultLabel: "Personal Loans", type: "Liability" },
+] as const;
+
+function NetWorthFieldsTab() {
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/settings/net-worth-labels")
+      .then((r) => r.json())
+      .then((d: Record<string, string>) => setLabels(d))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  function getLabel(key: string, defaultLabel: string) {
+    return labels[key] ?? defaultLabel;
+  }
+
+  function startEdit(key: string, currentLabel: string) {
+    setEditKey(key);
+    setEditValue(currentLabel);
+    setError(null);
+  }
+
+  async function saveEdit() {
+    if (!editKey) return;
+    const trimmed = editValue.trim();
+    if (!trimmed) { setError("Label cannot be empty."); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/net-worth-labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [editKey]: trimmed }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setLabels((prev) => ({ ...prev, [editKey]: trimmed }));
+      setEditKey(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetLabel(key: string) {
+    const field = NW_FIELDS.find((f) => f.key === key);
+    if (!field) return;
+    setSaving(true);
+    try {
+      await fetch("/api/settings/net-worth-labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: field.defaultLabel }),
+      });
+      setLabels((prev) => ({ ...prev, [key]: field.defaultLabel }));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="h-24 animate-pulse rounded-md bg-muted" />;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Rename the display labels for your Net Worth fields. These names appear throughout the app.
+      </p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(["Asset", "Liability"] as const).map((type) => (
+        <Card key={type}>
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className={`text-sm font-semibold uppercase tracking-wider ${type === "Asset" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+              {type === "Asset" ? "Assets" : "Liabilities"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <div className="rounded-md border overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Field Key</th>
+                    <th className="px-3 py-2 text-left font-medium">Display Label</th>
+                    <th className="px-3 py-2 text-center font-medium w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {NW_FIELDS.filter((f) => f.type === type).map((field) => (
+                    editKey === field.key ? (
+                      <tr key={field.key} className="border-t bg-blue-50 dark:bg-blue-950/20">
+                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{field.key}</td>
+                        <td className="px-2 py-1">
+                          <input
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditKey(null); }}
+                            autoFocus
+                            className="h-7 w-full rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={saveEdit} disabled={saving} className="p-1 hover:text-green-600 transition-colors" title="Save">
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => setEditKey(null)} className="p-1 hover:text-red-600 transition-colors" title="Cancel">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={field.key} className="border-t hover:bg-muted/30">
+                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{field.key}</td>
+                        <td className="px-3 py-2 font-medium">{getLabel(field.key, field.defaultLabel)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => startEdit(field.key, getLabel(field.key, field.defaultLabel))}
+                              className="p-1 hover:text-blue-600 transition-colors" title="Rename"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            {labels[field.key] && labels[field.key] !== field.defaultLabel && (
+                              <button
+                                onClick={() => resetLabel(field.key)}
+                                className="p-1 hover:text-muted-foreground transition-colors text-xs"
+                                title="Reset to default"
+                              >
+                                ↺
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function DataManagerPage() {
@@ -903,6 +1060,7 @@ export default function DataManagerPage() {
         <TabsList>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="categories">Categories & Groups</TabsTrigger>
+          <TabsTrigger value="networth">Net Worth Fields</TabsTrigger>
         </TabsList>
 
         <TabsContent value="transactions" className="mt-4">
@@ -919,6 +1077,10 @@ export default function DataManagerPage() {
           ) : (
             <CategoriesTab categories={categories} onRefresh={loadCategories} />
           )}
+        </TabsContent>
+
+        <TabsContent value="networth" className="mt-4">
+          <NetWorthFieldsTab />
         </TabsContent>
       </Tabs>
     </div>

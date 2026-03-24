@@ -183,10 +183,10 @@ function calcTotalInterest(
   let balance = loanAmount;
   let totalInterest = 0;
   for (let i = 0; i < n && balance > 0.005; i++) {
-    const interest = balance * r;
-    const principal = Math.min(monthlyPayment - interest, balance);
+    const interest = round2(balance * r);
+    const principal = round2(Math.min(monthlyPayment - interest, balance));
     totalInterest += interest;
-    balance -= principal;
+    balance = round2(balance - principal);
   }
   return round2(totalInterest);
 }

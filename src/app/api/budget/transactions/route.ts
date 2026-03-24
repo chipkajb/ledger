@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   const [tx] = await db
     .insert(transactions)
-    .values({ ...body, weekLabel })
+    .values({ ...body, weekLabel, description: body.description ?? "" })
     .returning();
 
   return NextResponse.json(tx, { status: 201 });

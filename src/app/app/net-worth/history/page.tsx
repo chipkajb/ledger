@@ -22,6 +22,7 @@ import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency } from "@/lib/utils";
 import { format, subYears } from "date-fns";
+import { Copy, Check } from "lucide-react";
 
 interface Snapshot {
   id: string;
@@ -88,7 +89,7 @@ function oneYearAgoStr() { return format(subYears(new Date(), 1), "yyyy-MM-dd");
 function fiveYearsAgoStr() { return format(subYears(new Date(), 5), "yyyy-MM-dd"); }
 
 export default function NetWorthHistoryPage() {
-  const [from, setFrom] = useState(oneYearAgoStr());
+  const [from, setFrom] = useState("2000-01-01");
   const [to, setTo] = useState(todayStr());
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,16 @@ export default function NetWorthHistoryPage() {
   }, [from, to, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  const [copiedCol, setCopiedCol] = useState<string | null>(null);
+
+  function copyColumn(key: keyof Snapshot, label: string) {
+    const lines = snapshots.map((s) => `${s.snapshotDate}\t${(s[key] as number).toFixed(2)}`);
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
+      setCopiedCol(label);
+      setTimeout(() => setCopiedCol(null), 1500);
+    });
+  }
 
   // Enrich with date alias and delta
   const enriched: EnrichedSnapshot[] = snapshots.map((s, i) => {
@@ -293,16 +304,38 @@ export default function NetWorthHistoryPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      {[
-                        "Date", "Checking", "Savings", "Home Equity", "401K",
-                        "HSA/HRA", "Investments", "529", "Teamworks",
-                        "Mortgage", "Student Loans", "Personal Loans",
-                        "Total Assets", "Total Liabilities", "Net Worth", "Delta", ""
-                      ].map((col) => (
-                        <th key={col} className="whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground">
-                          {col}
+                      <th className="whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground">Date</th>
+                      {([
+                        { label: "Checking", key: "checking" as keyof Snapshot },
+                        { label: "Savings", key: "savings" as keyof Snapshot },
+                        { label: "Home Equity", key: "homeEquity" as keyof Snapshot },
+                        { label: "401K", key: "retirement401k" as keyof Snapshot },
+                        { label: "HSA/HRA", key: "hsaHra" as keyof Snapshot },
+                        { label: "Investments", key: "investments" as keyof Snapshot },
+                        { label: "529", key: "plan529" as keyof Snapshot },
+                        { label: "Teamworks", key: "teamworksEquity" as keyof Snapshot },
+                        { label: "Mortgage", key: "mortgageBalance" as keyof Snapshot },
+                        { label: "Student Loans", key: "studentLoans" as keyof Snapshot },
+                        { label: "Personal Loans", key: "personalLoans" as keyof Snapshot },
+                        { label: "Total Assets", key: "totalAssets" as keyof Snapshot },
+                        { label: "Total Liabilities", key: "totalLiabilities" as keyof Snapshot },
+                        { label: "Net Worth", key: "netWorth" as keyof Snapshot },
+                      ] as { label: string; key: keyof Snapshot }[]).map(({ label, key }) => (
+                        <th key={label} className="whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground">
+                          <span className="flex items-center gap-1 group">
+                            {label}
+                            <button
+                              onClick={() => copyColumn(key, label)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-foreground"
+                              title={`Copy ${label} column`}
+                            >
+                              {copiedCol === label ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </span>
                         </th>
                       ))}
+                      <th className="whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground">Delta</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>

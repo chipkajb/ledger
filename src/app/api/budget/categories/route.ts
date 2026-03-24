@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { budgetCategories, budgetCategoryTargets, transactions } from "@/lib/db/schema";
-import { eq, asc, sql, and } from "drizzle-orm";
+import { eq, asc, sql } from "drizzle-orm";
 
 export async function GET() {
   const session = await auth();
