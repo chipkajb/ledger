@@ -77,7 +77,6 @@ export async function GET(req: NextRequest) {
       name: cat.name,
       parentCategory: cat.parentCategory,
       isIncomeSource: cat.isIncomeSource,
-      isFunds: cat.isFunds,
       target,
       actual,
       pctOfTarget,
@@ -112,14 +111,10 @@ export async function GET(req: NextRequest) {
 
   // Totals
   const incomeCategories = categorySummaries.filter((c) => c.isIncomeSource);
-  const expenseCategories = categorySummaries.filter(
-    (c) => !c.isIncomeSource && !c.isFunds
-  );
-  const fundsCategories = categorySummaries.filter((c) => c.isFunds);
+  const expenseCategories = categorySummaries.filter((c) => !c.isIncomeSource);
 
   const totalIncome = incomeCategories.reduce((s, c) => s + c.actual, 0);
   const totalExpenses = expenseCategories.reduce((s, c) => s + c.actual, 0);
-  const totalFunds = fundsCategories.reduce((s, c) => s + c.actual, 0);
   const predictedIncome = monthlyTarget?.predictedIncome ?? 0;
 
   // Charity bank: carryover + giving target - actual giving
@@ -137,7 +132,6 @@ export async function GET(req: NextRequest) {
     predictedIncome,
     totalIncome,
     totalExpenses,
-    totalFunds,
     netGain: totalIncome - totalExpenses,
     charityBankBalance,
     charityBankCarryover,
