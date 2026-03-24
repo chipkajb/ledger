@@ -1,4 +1,8 @@
-# Ledger 💰
+<p align="center">
+  <img src="public/logo.png" alt="Ledger" width="120" />
+</p>
+
+# Ledger
 
 A personal finance tracking app for budgeting, mortgage management, and net worth tracking. Built with Next.js, SQLite (via Drizzle ORM), and NextAuth — fully self-hosted, no cloud required.
 

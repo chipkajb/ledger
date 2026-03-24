@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   LayoutDashboard,
   DollarSign,
@@ -107,11 +108,11 @@ export function Sidebar() {
         {/* Logo */}
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           {!collapsed && (
-            <span className="text-lg font-bold text-sidebar-foreground">
-              💰 Ledger
-            </span>
+            <Image src="/logo-dark.png" alt="Ledger" width={100} height={100} className="h-8 w-auto" />
           )}
-          {collapsed && <span className="text-xl">💰</span>}
+          {collapsed && (
+            <Image src="/logo-dark.png" alt="Ledger" width={32} height={32} className="h-8 w-8 object-contain" />
+          )}
         </div>
 
         {/* Nav */}
