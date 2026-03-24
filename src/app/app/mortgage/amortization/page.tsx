@@ -98,7 +98,7 @@ function EditableCell({
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
         disabled={saving}
-        className="w-24 rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        className="w-24 rounded border border-primary bg-background px-1 py-0.5 text-sm text-foreground focus:outline-none"
       />
     );
   }

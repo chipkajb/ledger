@@ -89,7 +89,7 @@ function oneYearAgoStr() { return format(subYears(new Date(), 1), "yyyy-MM-dd");
 function fiveYearsAgoStr() { return format(subYears(new Date(), 5), "yyyy-MM-dd"); }
 
 export default function NetWorthHistoryPage() {
-  const [from, setFrom] = useState("2000-01-01");
+  const [from, setFrom] = useState("2023-01-01");
   const [to, setTo] = useState(todayStr());
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);

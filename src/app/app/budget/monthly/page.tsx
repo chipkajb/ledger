@@ -144,11 +144,14 @@ function CategoryTable({
   groups,
   hideEmpty,
   prevGroups,
+  isIncome,
 }: {
   groups: ParentGroup[];
   hideEmpty: boolean;
   prevGroups?: ParentGroup[];
+  isIncome?: boolean;
 }) {
+  const Badge = isIncome ? IncomeDiffBadge : DiffBadge;
   const filtered = filterGroups(groups, hideEmpty);
   const prevMap = new Map(prevGroups?.map((g) => [g.parentCategory, g]) ?? []);
 
@@ -170,7 +173,7 @@ function CategoryTable({
                 <TableCell className="py-1.5 text-sm">{group.parentCategory}</TableCell>
                 <TableCell className="py-1.5 text-right text-sm">
                   {formatCurrency(group.actual)}
-                  <DiffBadge curr={group.actual} prev={prevGroup?.actual} />
+                  <Badge curr={group.actual} prev={prevGroup?.actual} />
                 </TableCell>
               </TableRow>
               {group.categories.map((cat) => {
@@ -180,7 +183,7 @@ function CategoryTable({
                     <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
                     <TableCell className="py-1.5 text-right text-sm">
                       {cat.actual === 0 ? "—" : formatCurrency(cat.actual)}
-                      {cat.actual !== 0 && <DiffBadge curr={cat.actual} prev={prevCat?.actual} />}
+                      {cat.actual !== 0 && <Badge curr={cat.actual} prev={prevCat?.actual} />}
                     </TableCell>
                   </TableRow>
                 );
@@ -525,7 +528,7 @@ export default function MonthlyBudgetPage() {
                   <CardTitle className="text-sm font-medium">Income</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <CategoryTable groups={incomeGroups} hideEmpty={hideEmpty} prevGroups={prevIncomeGroups} />
+                  <CategoryTable groups={incomeGroups} hideEmpty={hideEmpty} prevGroups={prevIncomeGroups} isIncome />
                 </CardContent>
               </Card>
             )}
