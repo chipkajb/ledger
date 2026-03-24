@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { transactions, budgetCategories, budgetMonthlyTargets, budgetCategoryTargets } from "@/lib/db/schema";
+import { budgetCategories } from "@/lib/db/schema";
 import { format, addDays, getISOWeek, getISOWeekYear, parseISO } from "date-fns";
 import * as XLSX from "xlsx";
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (!raw) return null;
     const lc = raw.trim().toLowerCase();
     if (catMap.has(lc)) return catMap.get(lc)!;
-    for (const [n, id] of catMap) {
+    for (const [n, id] of Array.from(catMap)) {
       if (lc.includes(n) || n.includes(lc)) return id;
     }
     return null;
@@ -62,15 +62,15 @@ export async function POST(req: NextRequest) {
     july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
   };
 
-  const insertTx = db.prepare(`
+  const insertTx = db.$client.prepare(`
     INSERT INTO transactions (date, amount, description, category_id, week_label)
     VALUES (?, ?, ?, ?, ?)
   `);
-  const upsertMonthlyTarget = db.prepare(`
+  const upsertMonthlyTarget = db.$client.prepare(`
     INSERT OR REPLACE INTO budget_monthly_targets (month, predicted_income, charity_bank_carryover)
     VALUES (?, ?, ?)
   `);
-  const upsertCatTarget = db.prepare(`
+  const upsertCatTarget = db.$client.prepare(`
     INSERT OR REPLACE INTO budget_category_targets (month, category_id, target_amount)
     VALUES (?, ?, ?)
   `);
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   const monthsImported: string[] = [];
   const skipped: string[] = [];
 
-  const doImport = db.transaction(() => {
+  const doImport = db.$client.transaction(() => {
     for (const sheetName of wb.SheetNames) {
       const monthNum = MONTH_NAMES[sheetName.toLowerCase()];
       const isFlat = !monthNum && sheetName.toLowerCase() !== "summary";

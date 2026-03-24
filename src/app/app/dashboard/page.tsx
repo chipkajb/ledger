@@ -353,6 +353,12 @@ export default function DashboardPage() {
                   />
                   <Tooltip
                     formatter={(v: number) => [formatCurrency(v), "Net Worth"]}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      color: "hsl(var(--popover-foreground))",
+                    }}
                   />
                   <Line
                     type="monotone"
@@ -395,7 +401,15 @@ export default function DashboardPage() {
                     tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
                     width={48}
                   />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip
+                    formatter={(v: number) => formatCurrency(v)}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      color: "hsl(var(--popover-foreground))",
+                    }}
+                  />
                   <Bar dataKey="Actual" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -435,7 +449,15 @@ export default function DashboardPage() {
                     tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
                     width={52}
                   />
-                  <Tooltip formatter={(v: number) => [formatCurrency(v), "Balance"]} />
+                  <Tooltip
+                    formatter={(v: number) => [formatCurrency(v), "Balance"]}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      color: "hsl(var(--popover-foreground))",
+                    }}
+                  />
                   <Area
                     type="monotone"
                     dataKey="Balance"

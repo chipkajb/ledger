@@ -31,10 +31,10 @@ import {
   formatCurrency,
   currentMonth,
   isoToMonthLabel,
-  monthsInYear,
   getWeekLabel,
   currentDate,
 } from "@/lib/utils";
+import { format, subMonths, parseISO } from "date-fns";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,34 @@ interface ParentGroup {
   parentCategory: string;
   actual: number;
   categories: CategorySummary[];
+}
+
+function prevMonthStr(month: string): string {
+  return format(subMonths(parseISO(`${month}-01`), 1), "yyyy-MM");
+}
+
+function DiffBadge({ curr, prev }: { curr: number; prev: number | undefined }) {
+  if (prev === undefined) return null;
+  const diff = curr - prev;
+  if (diff === 0) return null;
+  const up = diff > 0;
+  return (
+    <span className={`text-xs ml-1 font-normal ${up ? "text-red-500" : "text-green-600"}`}>
+      {up ? "▲" : "▼"} {formatCurrency(Math.abs(diff))}
+    </span>
+  );
+}
+
+function IncomeDiffBadge({ curr, prev }: { curr: number; prev: number | undefined }) {
+  if (prev === undefined) return null;
+  const diff = curr - prev;
+  if (diff === 0) return null;
+  const up = diff > 0;
+  return (
+    <span className={`text-xs ml-1 font-normal ${up ? "text-green-600" : "text-red-500"}`}>
+      {up ? "▲" : "▼"} {formatCurrency(Math.abs(diff))}
+    </span>
+  );
 }
 
 
@@ -112,8 +140,18 @@ function filterGroups(groups: ParentGroup[], hideEmpty: boolean): ParentGroup[] 
     .filter((g) => g.categories.length > 0);
 }
 
-function CategoryTable({ groups, hideEmpty }: { groups: ParentGroup[]; hideEmpty: boolean }) {
+function CategoryTable({
+  groups,
+  hideEmpty,
+  prevGroups,
+}: {
+  groups: ParentGroup[];
+  hideEmpty: boolean;
+  prevGroups?: ParentGroup[];
+}) {
   const filtered = filterGroups(groups, hideEmpty);
+  const prevMap = new Map(prevGroups?.map((g) => [g.parentCategory, g]) ?? []);
+
   return (
     <Table>
       <TableHeader>
@@ -123,22 +161,33 @@ function CategoryTable({ groups, hideEmpty }: { groups: ParentGroup[]; hideEmpty
         </TableRow>
       </TableHeader>
       <TableBody>
-        {filtered.map((group) => (
-          <>
-            <TableRow key={`parent-${group.parentCategory}`} className="bg-muted/50 font-semibold">
-              <TableCell className="py-1.5 text-sm">{group.parentCategory}</TableCell>
-              <TableCell className="py-1.5 text-right text-sm">{formatCurrency(group.actual)}</TableCell>
-            </TableRow>
-            {group.categories.map((cat) => (
-              <TableRow key={`cat-${cat.id}`}>
-                <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
+        {filtered.map((group) => {
+          const prevGroup = prevMap.get(group.parentCategory);
+          const prevCatMap = new Map(prevGroup?.categories.map((c) => [c.id, c]) ?? []);
+          return (
+            <>
+              <TableRow key={`parent-${group.parentCategory}`} className="bg-muted/50 font-semibold">
+                <TableCell className="py-1.5 text-sm">{group.parentCategory}</TableCell>
                 <TableCell className="py-1.5 text-right text-sm">
-                  {cat.actual === 0 ? "—" : formatCurrency(cat.actual)}
+                  {formatCurrency(group.actual)}
+                  <DiffBadge curr={group.actual} prev={prevGroup?.actual} />
                 </TableCell>
               </TableRow>
-            ))}
-          </>
-        ))}
+              {group.categories.map((cat) => {
+                const prevCat = prevCatMap.get(cat.id);
+                return (
+                  <TableRow key={`cat-${cat.id}`}>
+                    <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
+                    <TableCell className="py-1.5 text-right text-sm">
+                      {cat.actual === 0 ? "—" : formatCurrency(cat.actual)}
+                      {cat.actual !== 0 && <DiffBadge curr={cat.actual} prev={prevCat?.actual} />}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -147,7 +196,7 @@ function CategoryTable({ groups, hideEmpty }: { groups: ParentGroup[]; hideEmpty
 // ── Quick-Add Transaction Form ─────────────────────────────────────────────
 
 function QuickAddTransaction({
-  month,
+  month: _month,
   categories,
   onAdded,
 }: {
@@ -281,6 +330,7 @@ export default function MonthlyBudgetPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
 
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
+  const [prevSummary, setPrevSummary] = useState<BudgetSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -299,9 +349,15 @@ export default function MonthlyBudgetPage() {
 
   function loadData() {
     setLoadingSummary(true);
-    fetch(`/api/budget/summary?month=${selectedMonth}`)
-      .then((r) => r.json())
-      .then((d: BudgetSummary) => setSummary(d))
+    const prevMonth = prevMonthStr(selectedMonth);
+    Promise.all([
+      fetch(`/api/budget/summary?month=${selectedMonth}`).then((r) => r.json()),
+      fetch(`/api/budget/summary?month=${prevMonth}`).then((r) => r.json()),
+    ])
+      .then(([curr, prev]: [BudgetSummary, BudgetSummary]) => {
+        setSummary(curr);
+        setPrevSummary(prev);
+      })
       .catch(console.error)
       .finally(() => setLoadingSummary(false));
 
@@ -331,6 +387,12 @@ export default function MonthlyBudgetPage() {
     g.categories.some((c) => c.isIncomeSource)
   );
   const expenseGroups = (summary?.parentGroups ?? []).filter(
+    (g) => !g.categories.some((c) => c.isIncomeSource)
+  );
+  const prevIncomeGroups = (prevSummary?.parentGroups ?? []).filter((g) =>
+    g.categories.some((c) => c.isIncomeSource)
+  );
+  const prevExpenseGroups = (prevSummary?.parentGroups ?? []).filter(
     (g) => !g.categories.some((c) => c.isIncomeSource)
   );
 
@@ -405,6 +467,7 @@ export default function MonthlyBudgetPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">{formatCurrency(summary.totalIncome)}</div>
+              <IncomeDiffBadge curr={summary.totalIncome} prev={prevSummary?.totalIncome} />
             </CardContent>
           </Card>
           <Card>
@@ -415,6 +478,7 @@ export default function MonthlyBudgetPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">{formatCurrency(summary.totalExpenses)}</div>
+              <DiffBadge curr={summary.totalExpenses} prev={prevSummary?.totalExpenses} />
             </CardContent>
           </Card>
           <Card>
@@ -427,6 +491,7 @@ export default function MonthlyBudgetPage() {
               <div className={`text-xl font-bold ${summary.netGain >= 0 ? "text-green-600" : "text-red-600"}`}>
                 {formatCurrency(summary.netGain)}
               </div>
+              <IncomeDiffBadge curr={summary.netGain} prev={prevSummary?.netGain} />
             </CardContent>
           </Card>
         </div>
@@ -460,7 +525,7 @@ export default function MonthlyBudgetPage() {
                   <CardTitle className="text-sm font-medium">Income</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <CategoryTable groups={incomeGroups} hideEmpty={hideEmpty} />
+                  <CategoryTable groups={incomeGroups} hideEmpty={hideEmpty} prevGroups={prevIncomeGroups} />
                 </CardContent>
               </Card>
             )}
@@ -471,7 +536,7 @@ export default function MonthlyBudgetPage() {
                   <CardTitle className="text-sm font-medium">Expenses</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <CategoryTable groups={expenseGroups} hideEmpty={hideEmpty} />
+                  <CategoryTable groups={expenseGroups} hideEmpty={hideEmpty} prevGroups={prevExpenseGroups} />
                 </CardContent>
               </Card>
             )}

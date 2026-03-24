@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { transactions, budgetCategories } from "@/lib/db/schema";
+import { budgetCategories } from "@/lib/db/schema";
 import { getISOWeekYear, getISOWeek, parseISO, format, addDays } from "date-fns";
 import * as XLSX from "xlsx";
 
@@ -53,13 +53,13 @@ export async function POST(req: NextRequest) {
     if (!raw) return null;
     const lc = raw.trim().toLowerCase();
     if (catMap.has(lc)) return catMap.get(lc)!;
-    for (const [n, id] of catMap) {
+    for (const [n, id] of Array.from(catMap)) {
       if (lc.includes(n) || n.includes(lc)) return id;
     }
     return null;
   }
 
-  const insertTx = db.prepare(`
+  const insertTx = db.$client.prepare(`
     INSERT INTO transactions (date, amount, description, category_id, week_label)
     VALUES (?, ?, ?, ?, ?)
   `);
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   let imported = 0;
   const skipped: string[] = [];
 
-  const insertBatch = db.transaction(() => {
+  const insertBatch = db.$client.transaction(() => {
     for (const row of rows) {
       const dateStr = resolveDate(row);
       if (!dateStr) {
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseFile(buf: Buffer, filename: string): Array<Record<string, unknown>> {
+function parseFile(buf: Buffer, _filename: string): Array<Record<string, unknown>> {
   const wb = XLSX.read(buf, { type: "buffer" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   if (!sheet) throw new Error("Empty workbook");

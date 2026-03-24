@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { mortgages, mortgageExtraPayments } from "@/lib/db/schema";
+import { mortgages } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { addDays, format } from "date-fns";
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const mortgageIdRaw = formData.get("mortgageId") as string | null;
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const name = file.name.toLowerCase();
+  const _name = file.name.toLowerCase();
 
   let rows: Array<Record<string, unknown>>;
   try {

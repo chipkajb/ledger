@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { netWorthSnapshots } from "@/lib/db/schema";
+
 import { format, addDays } from "date-fns";
 import * as XLSX from "xlsx";
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb();
-  const insertSnap = db.prepare(`
+  const insertSnap = db.$client.prepare(`
     INSERT OR IGNORE INTO net_worth_snapshots
     (snapshot_date, checking, savings, home_equity, retirement_401k, hsa_hra,
      investments, plan_529, teamworks_equity, mortgage_balance, student_loans,
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   let imported = 0;
   const skipped: string[] = [];
 
-  const insertBatch = db.transaction(() => {
+  const insertBatch = db.$client.transaction(() => {
     for (const row of dataRows) {
       const rawDate = findCol(row, "date");
       const dateStr = parseRawDate(rawDate);
