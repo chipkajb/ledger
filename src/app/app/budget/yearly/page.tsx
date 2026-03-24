@@ -207,6 +207,7 @@ export default function YearlyBudgetPage() {
             apiUrl="/api/import/budget"
             title="Import Budget File"
             description={`Upload a Budget ${selectedYear}.xlsx file (or CSV). Each sheet should be named after a month. Columns: Date, Category, Description, Amount.`}
+            templateUrl="/templates/budget-template.csv"
             triggerLabel="Import Budget XLSX"
             onSuccess={() => loadData()}
           />

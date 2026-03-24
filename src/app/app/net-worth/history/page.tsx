@@ -158,6 +158,7 @@ export default function NetWorthHistoryPage() {
             apiUrl="/api/import/net-worth"
             title="Import Net Worth Snapshots"
             description="Upload a CSV or Excel file. Expected columns: Date, Checking, Savings, Home Equity, 401K, HSA/HRA, Investments, 529 Plan, Teamworks, Mortgage Balance, Student Loans, Personal Loans."
+            templateUrl="/templates/net-worth-template.csv"
             triggerLabel="Import CSV/XLSX"
             onSuccess={() => load()}
           />

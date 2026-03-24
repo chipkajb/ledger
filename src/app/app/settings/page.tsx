@@ -274,7 +274,7 @@ export default function SettingsPage() {
                     min="0"
                     value={housePrice}
                     onChange={(e) => setHousePrice(e.target.value)}
-                    placeholder="815000"
+                    placeholder="400000"
                     required
                   />
                 </div>
@@ -287,7 +287,7 @@ export default function SettingsPage() {
                     min="0"
                     value={downPayment}
                     onChange={(e) => setDownPayment(e.target.value)}
-                    placeholder="163000"
+                    placeholder="80000"
                     required
                   />
                 </div>
@@ -300,7 +300,7 @@ export default function SettingsPage() {
                     min="0"
                     value={loanAmount}
                     onChange={(e) => setLoanAmount(e.target.value)}
-                    placeholder="652000"
+                    placeholder="320000"
                     required
                   />
                 </div>
@@ -314,7 +314,7 @@ export default function SettingsPage() {
                     max="100"
                     value={annualRate}
                     onChange={(e) => setAnnualRate(e.target.value)}
-                    placeholder="5.99"
+                    placeholder="6.50"
                     required
                   />
                 </div>

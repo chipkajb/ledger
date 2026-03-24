@@ -392,29 +392,29 @@ db.prepare("DELETE FROM mortgage_extra_payments").run();
 db.prepare("DELETE FROM mortgages").run();
 
 const m1 = insertMortgage.run(
-  "Original Mortgage",
-  815000, 369500, 445500, 0.06625, 30, 12,
-  "2025-09-01", 645.78, 0, 0,
-  "Original loan at 6.625%"
+  "Example Mortgage",
+  400000, 80000, 320000, 0.065, 30, 12,
+  "2024-01-01", 400.00, 0, 0,
+  "Example original loan at 6.5%"
 );
 
 const m2 = insertMortgage.run(
-  "Refinanced Mortgage",
-  815000, 373490, 441510, 0.0599, 30, 12,
-  "2026-04-01", 645.78, 0, 1,
-  "Refinanced at 5.99% in early 2026"
+  "Example Refinance",
+  400000, 85000, 315000, 0.055, 30, 12,
+  "2025-01-01", 400.00, 0, 1,
+  "Example refinance at 5.5%"
 );
 
 const m1Id = m1.lastInsertRowid as number;
 
-// Extra payments for original mortgage
+// Example extra payments
 const insertExtra = db.prepare(`
   INSERT INTO mortgage_extra_payments (mortgage_id, payment_date, amount, note)
   VALUES (?, ?, ?, ?)
 `);
-insertExtra.run(m1Id, "2025-12-01", 3000, "Extra payment December 2025");
-insertExtra.run(m1Id, "2026-01-01", 500, "Extra payment January 2026");
-insertExtra.run(m1Id, "2026-02-01", 500, "Extra payment February 2026");
+insertExtra.run(m1Id, "2024-06-01", 500, "Example extra payment");
+insertExtra.run(m1Id, "2024-07-01", 500, "Example extra payment");
+insertExtra.run(m1Id, "2024-08-01", 500, "Example extra payment");
 
 console.log("✅ Inserted 2 mortgages + 3 extra payments");
 

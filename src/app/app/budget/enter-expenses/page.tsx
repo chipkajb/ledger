@@ -291,6 +291,7 @@ export default function EnterExpensesPage() {
             apiUrl="/api/import/transactions"
             title="Import Transactions"
             description="Upload a CSV or Excel file. Expected columns: Date, Category, Description, Amount. Also supports Debit/Credit columns."
+            templateUrl="/templates/transactions-template.csv"
             triggerLabel="Import CSV/XLSX"
             onSuccess={() => loadTransactions(selectedMonth)}
           />
