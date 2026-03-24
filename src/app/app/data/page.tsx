@@ -459,6 +459,18 @@ function CategoriesTab({
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [addGroupOpen, setAddGroupOpen] = useState(false);
+  const [addGroupName, setAddGroupName] = useState("");
+  const [addGroupError, setAddGroupError] = useState<string | null>(null);
+
+  const [renameGroupOpen, setRenameGroupOpen] = useState(false);
+  const [renameGroupOldName, setRenameGroupOldName] = useState("");
+  const [renameGroupNewName, setRenameGroupNewName] = useState("");
+  const [renameGroupSaving, setRenameGroupSaving] = useState(false);
+  const [renameGroupError, setRenameGroupError] = useState<string | null>(null);
+
+  const [deleteGroupError, setDeleteGroupError] = useState<string | null>(null);
+
   const grouped = useMemo(() =>
     categories.reduce<Record<string, Category[]>>((acc, c) => {
       if (!acc[c.parentCategory]) acc[c.parentCategory] = [];
@@ -557,23 +569,105 @@ function CategoriesTab({
     }
   }
 
+  function openAddGroup() {
+    setAddGroupName("");
+    setAddGroupError(null);
+    setAddGroupOpen(true);
+  }
+
+  function confirmAddGroup() {
+    const name = addGroupName.trim();
+    if (!name) { setAddGroupError("Group name is required."); return; }
+    if (existingGroups.includes(name)) { setAddGroupError("A group with this name already exists."); return; }
+    setAddGroupOpen(false);
+    setAddGroup(name);
+    setAddName("");
+    setAddSort("");
+    setAddIsIncome(false);
+    setAddError(null);
+    setAddOpen(true);
+  }
+
+  function openRenameGroup(name: string) {
+    setRenameGroupOldName(name);
+    setRenameGroupNewName(name);
+    setRenameGroupError(null);
+    setRenameGroupOpen(true);
+  }
+
+  async function saveRenameGroup() {
+    const newName = renameGroupNewName.trim();
+    if (!newName) { setRenameGroupError("Group name is required."); return; }
+    if (newName === renameGroupOldName) { setRenameGroupOpen(false); return; }
+    if (existingGroups.includes(newName)) { setRenameGroupError("A group with this name already exists."); return; }
+    setRenameGroupSaving(true);
+    setRenameGroupError(null);
+    try {
+      const res = await fetch("/api/budget/groups", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldName: renameGroupOldName, newName }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Rename failed");
+      setRenameGroupOpen(false);
+      onRefresh();
+    } catch (e) {
+      setRenameGroupError(e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      setRenameGroupSaving(false);
+    }
+  }
+
+  async function deleteGroup(name: string) {
+    setDeleteGroupError(null);
+    const catCount = grouped[name]?.length ?? 0;
+    if (!confirm(`Delete group "${name}" and all ${catCount} of its categories? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/budget/groups?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        setDeleteGroupError(err.error ?? "Delete failed");
+        return;
+      }
+      onRefresh();
+    } catch {
+      setDeleteGroupError("Delete failed");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{categories.length} categories across {groupKeys.length} groups</p>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add Category
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={openAddGroup}>
+            <Plus className="h-4 w-4 mr-1" /> Add Group
+          </Button>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Add Category
+          </Button>
+        </div>
       </div>
 
       {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+      {deleteGroupError && <p className="text-sm text-red-600">{deleteGroupError}</p>}
 
       {groupKeys.map((group) => (
         <Card key={group}>
           <CardHeader className="pb-2 pt-4">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              {group}
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                {group}
+              </CardTitle>
+              <div className="flex items-center gap-1">
+                <button onClick={() => openRenameGroup(group)} className="p-1 hover:text-blue-600 transition-colors" title="Rename group">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => deleteGroup(group)} className="p-1 hover:text-red-600 transition-colors" title="Delete group">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="pb-3">
             <div className="rounded-md border overflow-auto">
@@ -662,6 +756,61 @@ function CategoriesTab({
           </CardContent>
         </Card>
       ))}
+
+      {/* Add Group Dialog */}
+      <Dialog open={addGroupOpen} onOpenChange={setAddGroupOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Group</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Group Name</label>
+              <input
+                value={addGroupName}
+                onChange={(e) => setAddGroupName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmAddGroup(); }}
+                placeholder="e.g. Food"
+                autoFocus
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            {addGroupError && <p className="text-sm text-red-600">{addGroupError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddGroupOpen(false)}>Cancel</Button>
+            <Button onClick={confirmAddGroup}>Continue →</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Group Dialog */}
+      <Dialog open={renameGroupOpen} onOpenChange={setRenameGroupOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename Group</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Group Name</label>
+              <input
+                value={renameGroupNewName}
+                onChange={(e) => setRenameGroupNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveRenameGroup(); }}
+                autoFocus
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            {renameGroupError && <p className="text-sm text-red-600">{renameGroupError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameGroupOpen(false)}>Cancel</Button>
+            <Button onClick={saveRenameGroup} disabled={renameGroupSaving}>
+              {renameGroupSaving ? "Saving…" : "Rename"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Category Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
