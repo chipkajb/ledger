@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Download } from "lucide-react";
 
 interface ImportResult {
   imported?: number;
@@ -32,6 +33,8 @@ interface ImportDialogProps {
   accept?: string;
   /** Called after a successful import */
   onSuccess?: (result: ImportResult) => void;
+  /** URL to a downloadable template file shown inside the dialog */
+  templateUrl?: string;
   /** Trigger button label */
   triggerLabel?: string;
   triggerVariant?: "default" | "outline" | "ghost" | "secondary";
@@ -45,6 +48,7 @@ export function ImportDialog({
   description,
   accept = ".csv,.xlsx,.xls",
   onSuccess,
+  templateUrl,
   triggerLabel = "Import",
   triggerVariant = "outline",
   triggerSize = "sm",
@@ -111,6 +115,17 @@ export function ImportDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && (
             <p className="text-sm text-muted-foreground mt-1">{description}</p>
+          )}
+          {templateUrl && (
+            <a
+              href={templateUrl}
+              download
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Download className="h-3 w-3" />
+              Download template
+            </a>
           )}
         </DialogHeader>
 

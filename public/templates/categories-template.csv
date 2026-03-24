@@ -1,0 +1,14 @@
+Name,Parent Category,Is Income,Sort Order
+Salary,Income,true,1
+Freelance,Income,true,2
+Groceries,Food & Drink,false,10
+Restaurants,Food & Drink,false,11
+Coffee,Food & Drink,false,12
+Gas,Transportation,false,20
+Car Insurance,Transportation,false,21
+Electric,Utilities,false,30
+Internet,Utilities,false,31
+Water,Utilities,false,32
+Mortgage,Housing,false,40
+Streaming,Entertainment,false,50
+Gym,Health,false,60

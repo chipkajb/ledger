@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, isoToMonthLabel, currentMonth } from "@/lib/utils";
 import { Pencil, Trash2, Plus, Check, X } from "lucide-react";
 
@@ -631,6 +632,14 @@ function CategoriesTab({
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{categories.length} categories across {groupKeys.length} groups</p>
         <div className="flex gap-2">
+          <ImportDialog
+            apiUrl="/api/import/categories"
+            title="Import Categories"
+            description="Upload a CSV or Excel file. Expected columns: Name, Parent Category, Is Income (true/false), Sort Order (optional)."
+            templateUrl="/templates/categories-template.csv"
+            triggerLabel="Import CSV/XLSX"
+            onSuccess={() => onRefresh()}
+          />
           <Button size="sm" variant="outline" onClick={openAddGroup}>
             <Plus className="h-4 w-4 mr-1" /> Add Group
           </Button>
