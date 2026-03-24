@@ -2,8 +2,9 @@
 
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LogOut, User } from "lucide-react";
+import { LogOut, Moon, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/components/theme-provider";
 
 function getPageTitle(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -17,11 +18,21 @@ function getPageTitle(pathname: string): string {
 export function Topbar() {
   const pathname = usePathname();
   const title = getPageTitle(pathname);
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-6">
       <h1 className="text-lg font-semibold">{title}</h1>
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleTheme}
+          className="text-muted-foreground hover:text-foreground"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
         <Button
           variant="ghost"
           size="sm"

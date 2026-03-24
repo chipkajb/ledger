@@ -133,20 +133,16 @@ export async function GET(req: NextRequest) {
     const income = monthTxs
       .filter((t) => catById.get(t.categoryId)?.isIncomeSource)
       .reduce((s, t) => s + t.amount, 0);
-    const funds = monthTxs
-      .filter((t) => catById.get(t.categoryId)?.isFunds)
-      .reduce((s, t) => s + t.amount, 0);
     const expenses = monthTxs
-      .filter((t) => !catById.get(t.categoryId)?.isIncomeSource && !catById.get(t.categoryId)?.isFunds)
+      .filter((t) => !catById.get(t.categoryId)?.isIncomeSource)
       .reduce((s, t) => s + t.amount, 0);
     return {
       Month: MONTHS[i],
       Income: income,
       Expenses: expenses,
-      Funds: funds,
-      "Net Gain": income - expenses - funds,
+      "Net Gain": income - expenses,
     };
-  }).filter((r) => r.Income + r.Expenses + r.Funds > 0);
+  }).filter((r) => r.Income + r.Expenses > 0);
 
   if (summaryData.length > 0) {
     const ws = XLSX.utils.json_to_sheet(summaryData);

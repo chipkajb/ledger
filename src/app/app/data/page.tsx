@@ -35,7 +35,6 @@ interface TxRow {
   categoryName: string;
   parentCategory: string;
   isIncomeSource: boolean;
-  isFunds: boolean;
 }
 
 interface Category {
@@ -43,7 +42,6 @@ interface Category {
   name: string;
   parentCategory: string;
   isIncomeSource: boolean;
-  isFunds: boolean;
   sortOrder: number;
 }
 
@@ -448,7 +446,6 @@ function CategoriesTab({
   const [editGroup, setEditGroup] = useState("");
   const [editSort, setEditSort] = useState("");
   const [editIsIncome, setEditIsIncome] = useState(false);
-  const [editIsFunds, setEditIsFunds] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -457,7 +454,6 @@ function CategoriesTab({
   const [addGroup, setAddGroup] = useState("");
   const [addSort, setAddSort] = useState("");
   const [addIsIncome, setAddIsIncome] = useState(false);
-  const [addIsFunds, setAddIsFunds] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -485,7 +481,6 @@ function CategoriesTab({
     setEditGroup(c.parentCategory);
     setEditSort(String(c.sortOrder));
     setEditIsIncome(c.isIncomeSource);
-    setEditIsFunds(c.isFunds);
     setEditError(null);
   }
 
@@ -507,7 +502,6 @@ function CategoriesTab({
           parentCategory: editGroup.trim(),
           sortOrder: editSort ? parseInt(editSort) : 0,
           isIncomeSource: editIsIncome,
-          isFunds: editIsFunds,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
@@ -549,13 +543,12 @@ function CategoriesTab({
           parentCategory: addGroup.trim(),
           sortOrder: addSort ? parseInt(addSort) : 0,
           isIncomeSource: addIsIncome,
-          isFunds: addIsFunds,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed to add");
       setAddOpen(false);
       setAddName(""); setAddGroup(""); setAddSort("");
-      setAddIsIncome(false); setAddIsFunds(false);
+      setAddIsIncome(false);
       onRefresh();
     } catch (e) {
       setAddError(e instanceof Error ? e.message : "Add failed");
@@ -625,16 +618,10 @@ function CategoriesTab({
                           />
                         </td>
                         <td className="px-2 py-1">
-                          <div className="flex flex-col gap-0.5 text-xs">
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input type="checkbox" checked={editIsIncome} onChange={(e) => setEditIsIncome(e.target.checked)} className="h-3 w-3" />
-                              Income
-                            </label>
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input type="checkbox" checked={editIsFunds} onChange={(e) => setEditIsFunds(e.target.checked)} className="h-3 w-3" />
-                              Funds
-                            </label>
-                          </div>
+                          <label className="flex items-center gap-1 cursor-pointer text-xs">
+                            <input type="checkbox" checked={editIsIncome} onChange={(e) => setEditIsIncome(e.target.checked)} className="h-3 w-3" />
+                            Income
+                          </label>
                         </td>
                         <td className="px-2 py-1">
                           <div className="flex items-center justify-center gap-1">
@@ -654,7 +641,7 @@ function CategoriesTab({
                         <td className="px-3 py-2 text-muted-foreground">{cat.parentCategory}</td>
                         <td className="px-3 py-2 text-center text-muted-foreground">{cat.sortOrder}</td>
                         <td className="px-3 py-2 text-center text-xs text-muted-foreground">
-                          {cat.isIncomeSource ? "Income" : cat.isFunds ? "Funds" : "Expense"}
+                          {cat.isIncomeSource ? "Income" : "Expense"}
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center justify-center gap-1">
@@ -721,10 +708,6 @@ function CategoriesTab({
               <label className="flex items-center gap-2 cursor-pointer text-sm">
                 <input type="checkbox" checked={addIsIncome} onChange={(e) => setAddIsIncome(e.target.checked)} className="h-4 w-4 rounded" />
                 Income source
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-sm">
-                <input type="checkbox" checked={addIsFunds} onChange={(e) => setAddIsFunds(e.target.checked)} className="h-4 w-4 rounded" />
-                Funds / savings
               </label>
             </div>
             {addError && <p className="text-sm text-red-600">{addError}</p>}

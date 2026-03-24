@@ -44,7 +44,6 @@ interface MonthData {
   month: string;
   income: number;
   expenses: number;
-  funds: number;
   netGain: number;
   categoryBreakdown: Record<string, number>;
 }
@@ -54,7 +53,6 @@ interface YearlyCategoryTotal {
   name: string;
   parentCategory: string;
   isIncomeSource: boolean;
-  isFunds: boolean;
   budgetAmount: number | null;
   budgetPct: number | null;
   total: number;
@@ -83,7 +81,13 @@ function monthAbbr(yyyyMM: string): string {
 
 // ── YTD Category Table ─────────────────────────────────────────────────────
 
-function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] }) {
+function YtdCategoryTable({
+  categories,
+  monthCount,
+}: {
+  categories: YearlyCategoryTotal[];
+  monthCount: number;
+}) {
   const parentGroups = categories.reduce<
     Record<string, { categories: YearlyCategoryTotal[]; total: number }>
   >((acc, cat) => {
@@ -97,16 +101,11 @@ function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] })
   const incomeParents = Object.entries(parentGroups).filter(([, g]) =>
     g.categories.some((c) => c.isIncomeSource)
   );
-  const fundsParents = Object.entries(parentGroups).filter(([, g]) =>
-    g.categories.some((c) => c.isFunds)
-  );
   const expenseParents = Object.entries(parentGroups).filter(
-    ([, g]) =>
-      !g.categories.some((c) => c.isIncomeSource) &&
-      !g.categories.some((c) => c.isFunds)
+    ([, g]) => !g.categories.some((c) => c.isIncomeSource)
   );
 
-  const allOrdered = [...incomeParents, ...fundsParents, ...expenseParents];
+  const allOrdered = [...incomeParents, ...expenseParents];
 
   if (allOrdered.length === 0) {
     return (
@@ -116,12 +115,16 @@ function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] })
     );
   }
 
+  const avg = (total: number) =>
+    monthCount > 0 ? formatCurrency(total / monthCount) : "—";
+
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead className="w-[220px]">Category</TableHead>
           <TableHead className="text-right">YTD Actual</TableHead>
+          <TableHead className="text-right">Monthly Avg</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -130,12 +133,16 @@ function YtdCategoryTable({ categories }: { categories: YearlyCategoryTotal[] })
             <TableRow key={`parent-${parent}`} className="bg-muted/50 font-semibold">
               <TableCell className="py-1.5 text-sm">{parent}</TableCell>
               <TableCell className="py-1.5 text-right text-sm">{formatCurrency(group.total)}</TableCell>
+              <TableCell className="py-1.5 text-right text-sm text-muted-foreground">{avg(group.total)}</TableCell>
             </TableRow>
             {group.categories.map((cat) => (
               <TableRow key={`cat-${cat.categoryId}`}>
                 <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
                 <TableCell className="py-1.5 text-right text-sm">
                   {cat.total === 0 ? "—" : formatCurrency(cat.total)}
+                </TableCell>
+                <TableCell className="py-1.5 text-right text-sm text-muted-foreground">
+                  {cat.total === 0 ? "—" : avg(cat.total)}
                 </TableCell>
               </TableRow>
             ))}
@@ -381,7 +388,7 @@ export default function YearlyBudgetPage() {
               ))}
             </div>
           ) : (
-            <YtdCategoryTable categories={data?.categories ?? []} />
+            <YtdCategoryTable categories={data?.categories ?? []} monthCount={months.length} />
           )}
         </CardContent>
       </Card>

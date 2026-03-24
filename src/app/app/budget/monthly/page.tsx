@@ -43,7 +43,6 @@ interface CategorySummary {
   name: string;
   parentCategory: string;
   isIncomeSource: boolean;
-  isFunds: boolean;
   actual: number;
 }
 
@@ -53,11 +52,11 @@ interface ParentGroup {
   categories: CategorySummary[];
 }
 
+
 interface BudgetSummary {
   month: string;
   totalIncome: number;
   totalExpenses: number;
-  totalFunds: number;
   netGain: number;
   parentGroups: ParentGroup[];
   categories: CategorySummary[];
@@ -106,7 +105,15 @@ function buildMonthOptionsByYear(): Array<{ year: string; months: string[] }> {
 
 // ── Category Table ─────────────────────────────────────────────────────────
 
-function CategoryTable({ groups }: { groups: ParentGroup[] }) {
+function filterGroups(groups: ParentGroup[], hideEmpty: boolean): ParentGroup[] {
+  if (!hideEmpty) return groups;
+  return groups
+    .map((g) => ({ ...g, categories: g.categories.filter((c) => c.actual !== 0) }))
+    .filter((g) => g.categories.length > 0);
+}
+
+function CategoryTable({ groups, hideEmpty }: { groups: ParentGroup[]; hideEmpty: boolean }) {
+  const filtered = filterGroups(groups, hideEmpty);
   return (
     <Table>
       <TableHeader>
@@ -116,7 +123,7 @@ function CategoryTable({ groups }: { groups: ParentGroup[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {groups.map((group) => (
+        {filtered.map((group) => (
           <>
             <TableRow key={`parent-${group.parentCategory}`} className="bg-muted/50 font-semibold">
               <TableCell className="py-1.5 text-sm">{group.parentCategory}</TableCell>
@@ -281,6 +288,7 @@ export default function MonthlyBudgetPage() {
   const [txCategoryFilter, setTxCategoryFilter] = useState<string>("all");
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [hideEmpty, setHideEmpty] = useState(false);
 
   useEffect(() => {
     fetch("/api/budget/categories")
@@ -322,13 +330,8 @@ export default function MonthlyBudgetPage() {
   const incomeGroups = (summary?.parentGroups ?? []).filter((g) =>
     g.categories.some((c) => c.isIncomeSource)
   );
-  const fundsGroups = (summary?.parentGroups ?? []).filter((g) =>
-    g.categories.some((c) => c.isFunds)
-  );
   const expenseGroups = (summary?.parentGroups ?? []).filter(
-    (g) =>
-      !g.categories.some((c) => c.isIncomeSource) &&
-      !g.categories.some((c) => c.isFunds)
+    (g) => !g.categories.some((c) => c.isIncomeSource)
   );
 
   const filterCategories = [
@@ -437,45 +440,48 @@ export default function MonthlyBudgetPage() {
           ))}
         </div>
       ) : summary ? (
-        <div className="space-y-6">
-          {incomeGroups.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Income</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <CategoryTable groups={incomeGroups} />
-              </CardContent>
-            </Card>
-          )}
+        <div className="space-y-4">
+          <div className="flex items-center justify-end">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground select-none">
+              <input
+                type="checkbox"
+                checked={hideEmpty}
+                onChange={(e) => setHideEmpty(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-primary"
+              />
+              Hide rows with no data
+            </label>
+          </div>
 
-          {fundsGroups.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Funds</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <CategoryTable groups={fundsGroups} />
-              </CardContent>
-            </Card>
-          )}
+          <div className="space-y-6">
+            {filterGroups(incomeGroups, hideEmpty).length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Income</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <CategoryTable groups={incomeGroups} hideEmpty={hideEmpty} />
+                </CardContent>
+              </Card>
+            )}
 
-          {expenseGroups.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Expenses</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <CategoryTable groups={expenseGroups} />
-              </CardContent>
-            </Card>
-          )}
+            {filterGroups(expenseGroups, hideEmpty).length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Expenses</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <CategoryTable groups={expenseGroups} hideEmpty={hideEmpty} />
+                </CardContent>
+              </Card>
+            )}
 
-          {incomeGroups.length === 0 && fundsGroups.length === 0 && expenseGroups.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No budget data for {isoToMonthLabel(selectedMonth)}.
-            </p>
-          )}
+            {incomeGroups.length === 0 && expenseGroups.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No budget data for {isoToMonthLabel(selectedMonth)}.
+              </p>
+            )}
+          </div>
         </div>
       ) : null}
 

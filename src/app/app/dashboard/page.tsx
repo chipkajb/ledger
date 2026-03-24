@@ -52,14 +52,12 @@ interface BudgetSummary {
   month: string;
   totalIncome: number;
   totalExpenses: number;
-  totalFunds: number;
   netGain: number;
   categories: {
     id: number;
     name: string;
     parentCategory: string;
     isIncomeSource: boolean;
-    isFunds: boolean;
     actual: number;
   }[];
 }
@@ -184,7 +182,7 @@ export default function DashboardPage() {
 
   // Bar chart data: top 8 expense categories by actual spend
   const categoryChartData = (budgetData?.categories ?? [])
-    .filter((c) => !c.isIncomeSource && !c.isFunds && c.actual > 0)
+    .filter((c) => !c.isIncomeSource && c.actual > 0)
     .sort((a, b) => b.actual - a.actual)
     .slice(0, 8)
     .map((c) => ({

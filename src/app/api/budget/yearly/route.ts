@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
       month: sql<string>`strftime('%Y-%m', ${transactions.date})`,
       parentCategory: budgetCategories.parentCategory,
       isIncomeSource: budgetCategories.isIncomeSource,
-      isFunds: budgetCategories.isFunds,
       total: sql<number>`sum(${transactions.amount})`,
     })
     .from(transactions)
@@ -68,11 +67,7 @@ export async function GET(req: NextRequest) {
       .reduce((s, r) => s + r.total, 0);
 
     const expenses = monthRows
-      .filter((r) => !r.isIncomeSource && !r.isFunds)
-      .reduce((s, r) => s + r.total, 0);
-
-    const funds = monthRows
-      .filter((r) => r.isFunds)
+      .filter((r) => !r.isIncomeSource)
       .reduce((s, r) => s + r.total, 0);
 
     const categoryBreakdown: Record<string, number> = {};
@@ -85,7 +80,6 @@ export async function GET(req: NextRequest) {
       month,
       income,
       expenses,
-      funds,
       netGain: income - expenses,
       predictedIncome: target?.predictedIncome ?? 0,
       categoryBreakdown,
@@ -99,7 +93,6 @@ export async function GET(req: NextRequest) {
       name: budgetCategories.name,
       parentCategory: budgetCategories.parentCategory,
       isIncomeSource: budgetCategories.isIncomeSource,
-      isFunds: budgetCategories.isFunds,
       budgetAmount: budgetCategories.budgetAmount,
       budgetPct: budgetCategories.budgetPct,
       total: sql<number>`sum(${transactions.amount})`,

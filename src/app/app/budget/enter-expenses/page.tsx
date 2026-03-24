@@ -80,7 +80,7 @@ export default function EnterExpensesPage() {
       .then((r) => r.json())
       .then((data: Category[]) => {
         setCategories(data);
-        const first = data.find((c) => !c.isIncomeSource && !c.isFunds);
+        const first = data.find((c) => !c.isIncomeSource);
         if (first) {
           setFormGroup(first.parentCategory);
           setCategoryId(String(first.id));
