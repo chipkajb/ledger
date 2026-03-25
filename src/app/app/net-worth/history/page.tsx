@@ -23,7 +23,7 @@ import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency } from "@/lib/utils";
 import { format, subYears } from "date-fns";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Pencil, X, Save } from "lucide-react";
 
 interface Snapshot {
   id: string;
@@ -206,6 +206,66 @@ export default function NetWorthHistoryPage() {
 
   useEffect(() => { loadTable(); }, [loadTable]);
   useEffect(() => { loadCharts(); }, [loadCharts]);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Partial<Snapshot>>({});
+  const [saving, setSaving] = useState(false);
+
+  function handleStartEdit(s: Snapshot) {
+    setEditingId(s.id);
+    setEditValues({
+      snapshotDate: s.snapshotDate,
+      checking: s.checking,
+      savings: s.savings,
+      homeEquity: s.homeEquity,
+      retirement401k: s.retirement401k,
+      hsaHra: s.hsaHra,
+      investments: s.investments,
+      plan529: s.plan529,
+      teamworksEquity: s.teamworksEquity,
+      mortgageBalance: s.mortgageBalance,
+      studentLoans: s.studentLoans,
+      personalLoans: s.personalLoans,
+    });
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setEditValues({});
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/net-worth/snapshots", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, ...editValues }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setEditingId(null);
+      setEditValues({});
+      loadTable();
+      loadCharts();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function setEditField(field: keyof Snapshot, value: string) {
+    const numericFields = [
+      "checking", "savings", "homeEquity", "retirement401k", "hsaHra",
+      "investments", "plan529", "teamworksEquity", "mortgageBalance",
+      "studentLoans", "personalLoans",
+    ];
+    setEditValues((prev) => ({
+      ...prev,
+      [field]: numericFields.includes(field) ? (value === "" ? 0 : parseFloat(value)) : value,
+    }));
+  }
 
   const [copiedCol, setCopiedCol] = useState<string | null>(null);
 
@@ -564,47 +624,110 @@ export default function NetWorthHistoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tableEnriched.map((s, i) => (
-                      <tr key={s.id ?? i} className="border-b last:border-0 hover:bg-muted/30 group">
-                        <td className="whitespace-nowrap px-3 py-2 font-medium">{s.snapshotDate}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.checking)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.savings)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.homeEquity)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.retirement401k)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.hsaHra)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.investments)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.plan529)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.teamworksEquity)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.mortgageBalance)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.studentLoans)}</td>
-                        <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.personalLoans)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 font-medium text-green-600 dark:text-green-400">
-                          {formatCurrency(s.totalAssets)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 font-medium text-red-600 dark:text-red-400">
-                          {formatCurrency(s.totalLiabilities)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 font-semibold">{formatCurrency(s.netWorth)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 font-medium">
-                          {s.delta === undefined || s.delta === null ? (
-                            <span className="text-muted-foreground">—</span>
+                    {tableEnriched.map((s, i) => {
+                      const isEditing = editingId === s.id;
+                      return (
+                        <tr key={s.id ?? i} className={`border-b last:border-0 group ${isEditing ? "bg-muted/40" : "hover:bg-muted/30"}`}>
+                          {isEditing ? (
+                            <>
+                              <td className="whitespace-nowrap px-2 py-1">
+                                <Input
+                                  type="date"
+                                  value={editValues.snapshotDate ?? ""}
+                                  onChange={(e) => setEditField("snapshotDate", e.target.value)}
+                                  className="h-7 w-36 text-xs"
+                                />
+                              </td>
+                              {(["checking", "savings", "homeEquity", "retirement401k", "hsaHra", "investments", "plan529", "teamworksEquity", "mortgageBalance", "studentLoans", "personalLoans"] as (keyof Snapshot)[]).map((field) => (
+                                <td key={field} className="whitespace-nowrap px-2 py-1">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={editValues[field] ?? ""}
+                                    onChange={(e) => setEditField(field, e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); if (e.key === "Escape") handleCancelEdit(); }}
+                                    className="h-7 w-28 text-xs"
+                                  />
+                                </td>
+                              ))}
+                              {/* Computed columns — read-only while editing */}
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">auto</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">auto</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">auto</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">—</td>
+                              <td className="px-2 py-1">
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={handleSaveEdit}
+                                    disabled={saving}
+                                    className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                                    title="Save"
+                                  >
+                                    <Save className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={handleCancelEdit}
+                                    className="text-muted-foreground hover:text-foreground"
+                                    title="Cancel"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
                           ) : (
-                            <span className={s.delta > 0 ? "text-green-600 dark:text-green-400" : s.delta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
-                              {s.delta > 0 ? "+" : ""}{formatCurrency(s.delta)}
-                            </span>
+                            <>
+                              <td className="whitespace-nowrap px-3 py-2 font-medium">{s.snapshotDate}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.checking)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.savings)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.homeEquity)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.retirement401k)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.hsaHra)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.investments)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.plan529)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.teamworksEquity)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.mortgageBalance)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.studentLoans)}</td>
+                              <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.personalLoans)}</td>
+                              <td className="whitespace-nowrap px-3 py-2 font-medium text-green-600 dark:text-green-400">
+                                {formatCurrency(s.totalAssets)}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 font-medium text-red-600 dark:text-red-400">
+                                {formatCurrency(s.totalLiabilities)}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 font-semibold">{formatCurrency(s.netWorth)}</td>
+                              <td className="whitespace-nowrap px-3 py-2 font-medium">
+                                {s.delta === undefined || s.delta === null ? (
+                                  <span className="text-muted-foreground">—</span>
+                                ) : (
+                                  <span className={s.delta > 0 ? "text-green-600 dark:text-green-400" : s.delta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
+                                    {s.delta > 0 ? "+" : ""}{formatCurrency(s.delta)}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-2 py-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleStartEdit(s)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                    title="Edit snapshot"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSnapshot(s.id)}
+                                    className="text-xs text-red-500 hover:text-red-700"
+                                    title="Delete snapshot"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </td>
+                            </>
                           )}
-                        </td>
-                        <td className="px-2 py-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleDeleteSnapshot(s.id)}
-                            className="text-xs text-red-500 hover:text-red-700"
-                            title="Delete snapshot"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
