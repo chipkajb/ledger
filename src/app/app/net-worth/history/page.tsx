@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ResponsiveContainer,
+  ComposedChart,
   LineChart,
   Line,
   AreaChart,
@@ -15,6 +16,7 @@ import {
   Tooltip,
   CartesianGrid,
   Legend,
+  ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -114,24 +116,33 @@ function DeltaTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number }>;
+  payload?: Array<{ value: number; dataKey: string }>;
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
-  const value = payload[0].value;
-  const color = value > 0 ? "#22c55e" : value < 0 ? "#ef4444" : "#6b7280";
+  const deltaEntry = payload.find((p) => p.dataKey === "delta");
+  const avgEntry = payload.find((p) => p.dataKey === "rollingAvg");
+  const delta = deltaEntry?.value ?? 0;
+  const avg = avgEntry?.value;
+  const color = delta > 0 ? "#22c55e" : delta < 0 ? "#ef4444" : "#6b7280";
   return (
     <div
       className="rounded-lg p-2 text-sm shadow-md"
       style={TOOLTIP_CONTENT_STYLE}
     >
-      <p className="mb-1" style={TOOLTIP_LABEL_STYLE}>
+      <p className="mb-1 font-medium" style={TOOLTIP_LABEL_STYLE}>
         {label ? format(new Date(label + "T00:00:00"), "MMM d, yyyy") : ""}
       </p>
       <p style={{ color }}>
-        Change: {value > 0 ? "+" : ""}
-        {formatCurrency(value)}
+        Change: {delta > 0 ? "+" : ""}
+        {formatCurrency(delta)}
       </p>
+      {avg !== undefined && (
+        <p style={{ color: "#60a5fa" }}>
+          4-wk avg: {avg > 0 ? "+" : ""}
+          {formatCurrency(avg)}
+        </p>
+      )}
     </div>
   );
 }
@@ -301,6 +312,27 @@ export default function NetWorthHistoryPage() {
     .filter((s) => s.delta !== null && s.delta !== undefined)
     .map((s) => ({ date: s.date, delta: s.delta ?? 0 }));
 
+  // 4-point trailing rolling average (approx 4 weeks for monthly snapshots)
+  const ROLLING_WINDOW = 4;
+  const deltaDataWithAvg = deltaData.map((d, i) => {
+    const slice = deltaData.slice(Math.max(0, i - ROLLING_WINDOW + 1), i + 1);
+    const avg = slice.reduce((sum, x) => sum + x.delta, 0) / slice.length;
+    return { ...d, rollingAvg: avg };
+  });
+
+  // Y-axis domain clipped to 5th–95th percentile to suppress outlier distortion
+  const deltaDomain = useMemo(() => {
+    if (deltaData.length < 2) return ["auto", "auto"] as [string, string];
+    const vals = [...deltaData].map((d) => d.delta).sort((a, b) => a - b);
+    const n = vals.length;
+    const p5 = vals[Math.max(0, Math.floor(n * 0.05))];
+    const p95 = vals[Math.min(n - 1, Math.floor(n * 0.95))];
+    const pad = Math.abs(p95 - p5) * 0.3 || 5000;
+    const lo = Math.floor((p5 - pad) / 1000) * 1000;
+    const hi = Math.ceil((p95 + pad) / 1000) * 1000;
+    return [Math.min(lo, 0), Math.max(hi, 0)] as [number, number];
+  }, [deltaData]);
+
   // Table data: paginated, newest first
   const tableEnriched: EnrichedSnapshot[] = snapshots.map((s) => ({ ...s, date: s.snapshotDate }));
 
@@ -397,9 +429,9 @@ export default function NetWorthHistoryPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatCurrencyShort} width={64} />
                     <Tooltip content={<NetWorthTooltip />} />
                     <Line type="monotone" dataKey="netWorth" name="Net Worth" stroke="#3b82f6" strokeWidth={2} dot={false} />
                   </LineChart>
@@ -479,9 +511,9 @@ export default function NetWorthHistoryPage() {
                 </div>
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatCurrencyShort} width={64} />
                     <Tooltip
                       formatter={(v: number, name: string) => [formatCurrency(v), name]}
                       labelFormatter={(l) => format(new Date(l + "T00:00:00"), "MMM d, yyyy")}
@@ -525,21 +557,45 @@ export default function NetWorthHistoryPage() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={deltaData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
+                  <ComposedChart data={deltaDataWithAvg} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickFormatter={formatCurrencyShort}
+                      width={64}
+                      domain={deltaDomain}
+                    />
                     <Tooltip content={<DeltaTooltip />} />
+                    <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1} />
                     <Bar dataKey="delta" name="Change" radius={[2, 2, 0, 0]}>
-                      {deltaData.map((entry, index) => (
+                      {deltaDataWithAvg.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={entry.delta >= 0 ? "#22c55e" : "#ef4444"}
+                          fill={entry.delta >= 0 ? "#22c55e44" : "#ef444444"}
+                          stroke={entry.delta >= 0 ? "#22c55e" : "#ef4444"}
+                          strokeWidth={1}
                         />
                       ))}
                     </Bar>
-                  </BarChart>
+                    <Line
+                      type="monotone"
+                      dataKey="rollingAvg"
+                      name="4-wk Avg"
+                      stroke="#60a5fa"
+                      strokeWidth={2.5}
+                      dot={false}
+                      legendType="none"
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
+                <p className="mt-1 text-xs text-muted-foreground text-center">
+                  <span style={{ color: "#60a5fa" }}>&#8212;</span> 4-week rolling average &nbsp;&middot;&nbsp; bars de-emphasized, axis clipped to remove outlier distortion
+                </p>
               </CardContent>
             </Card>
 
@@ -549,20 +605,56 @@ export default function NetWorthHistoryPage() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
+                  <AreaChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="assetsGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.03} />
+                      </linearGradient>
+                      <linearGradient id="liabilitiesGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.03} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickFormatter={formatCurrencyShort}
+                      width={64}
+                    />
                     <Tooltip
                       formatter={(v: number, name: string) => [formatCurrency(v), name]}
                       labelFormatter={(l) => format(new Date(l + "T00:00:00"), "MMM d, yyyy")}
                       contentStyle={TOOLTIP_CONTENT_STYLE}
                       labelStyle={TOOLTIP_LABEL_STYLE}
                     />
-                    <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="totalAssets" name="Total Assets" stackId="a" fill="#10b981" />
-                    <Bar dataKey="totalLiabilities" name="Total Liabilities" stackId="b" fill="#ef4444" radius={[2, 2, 0, 0]} />
-                  </BarChart>
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "hsl(var(--muted-foreground))" }} />
+                    <Area
+                      type="monotone"
+                      dataKey="totalAssets"
+                      name="Total Assets"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      fill="url(#assetsGradient)"
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="totalLiabilities"
+                      name="Total Liabilities"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      fill="url(#liabilitiesGradient)"
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
