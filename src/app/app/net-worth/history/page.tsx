@@ -78,6 +78,18 @@ const ASSET_LABELS: Record<string, string> = {
   teamworksEquity: "Teamworks",
 };
 
+const LIABILITY_COLORS: Record<string, string> = {
+  mortgageBalance: "#ef4444",
+  studentLoans: "#f97316",
+  personalLoans: "#eab308",
+};
+
+const LIABILITY_LABELS: Record<string, string> = {
+  mortgageBalance: "Mortgage",
+  studentLoans: "Student Loans",
+  personalLoans: "Personal Loans",
+};
+
 function formatCurrencyShort(n: number): string {
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
@@ -124,6 +136,30 @@ function DeltaTooltip({
   );
 }
 
+function NetWorthTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const value = payload[0].value;
+  const color = value < 0 ? "#ef4444" : "#22c55e";
+  return (
+    <div className="rounded-lg p-2 text-sm shadow-md" style={TOOLTIP_CONTENT_STYLE}>
+      <p className="mb-1" style={TOOLTIP_LABEL_STYLE}>
+        {label ? format(new Date(label + "T00:00:00"), "MMM d, yyyy") : ""}
+      </p>
+      <p style={{ color }}>
+        Net Worth: {formatCurrency(value)}
+      </p>
+    </div>
+  );
+}
+
 export default function NetWorthHistoryPage() {
   const [from, setFrom] = useState("2023-01-01");
   const [to, setTo] = useState(todayStr());
@@ -134,8 +170,11 @@ export default function NetWorthHistoryPage() {
   const [page, setPage] = useState(1);
   // Chart data (all snapshots in date range)
   const [allSnapshots, setAllSnapshots] = useState<Snapshot[]>([]);
-  // Asset breakdown field visibility
+  // Asset/liability breakdown field visibility
   const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
+  const [hiddenLiabilities, setHiddenLiabilities] = useState<Set<string>>(new Set());
+  // Whether the breakdown chart shows assets or liabilities
+  const [breakdownMode, setBreakdownMode] = useState<"assets" | "liabilities">("assets");
 
   const LIMIT = 50;
 
@@ -187,6 +226,15 @@ export default function NetWorthHistoryPage() {
     });
   }
 
+  function toggleLiability(key: string) {
+    setHiddenLiabilities((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   // Chart data: all snapshots in ascending (chronological) order
   const chartEnriched: EnrichedSnapshot[] = allSnapshots.map((s) => ({ ...s, date: s.snapshotDate }));
   const deltaData = chartEnriched
@@ -217,6 +265,7 @@ export default function NetWorthHistoryPage() {
   }
 
   const visibleAssets = Object.keys(ASSET_COLORS).filter((k) => !hiddenAssets.has(k));
+  const visibleLiabilities = Object.keys(LIABILITY_COLORS).filter((k) => !hiddenLiabilities.has(k));
 
   return (
     <div className="space-y-6">
@@ -291,12 +340,7 @@ export default function NetWorthHistoryPage() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
-                    <Tooltip
-                      formatter={(v: number) => [formatCurrency(v), "Net Worth"]}
-                      labelFormatter={(l) => format(new Date(l + "T00:00:00"), "MMM d, yyyy")}
-                      contentStyle={TOOLTIP_CONTENT_STYLE}
-                      labelStyle={TOOLTIP_LABEL_STYLE}
-                    />
+                    <Tooltip content={<NetWorthTooltip />} />
                     <Line type="monotone" dataKey="netWorth" name="Net Worth" stroke="#3b82f6" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -304,32 +348,76 @@ export default function NetWorthHistoryPage() {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Asset Breakdown Over Time</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base">
+                  {breakdownMode === "assets" ? "Asset" : "Liability"} Breakdown Over Time
+                </CardTitle>
+                {/* Assets / Liabilities segmented control */}
+                <div className="flex rounded-md border text-xs overflow-hidden">
+                  <button
+                    onClick={() => setBreakdownMode("assets")}
+                    className={`px-3 py-1 font-medium transition-colors ${
+                      breakdownMode === "assets"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Assets
+                  </button>
+                  <button
+                    onClick={() => setBreakdownMode("liabilities")}
+                    className={`px-3 py-1 font-medium transition-colors border-l ${
+                      breakdownMode === "liabilities"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Liabilities
+                  </button>
+                </div>
               </CardHeader>
               <CardContent>
                 {/* Field toggles */}
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {Object.keys(ASSET_COLORS).map((key) => {
-                    const hidden = hiddenAssets.has(key);
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => toggleAsset(key)}
-                        className="px-2 py-0.5 rounded text-xs font-medium transition-opacity"
-                        style={{
-                          backgroundColor: hidden ? "transparent" : ASSET_COLORS[key] + "33",
-                          color: ASSET_COLORS[key],
-                          border: `1px solid ${ASSET_COLORS[key]}`,
-                          opacity: hidden ? 0.4 : 1,
-                        }}
-                      >
-                        {ASSET_LABELS[key]}
-                      </button>
-                    );
-                  })}
+                  {breakdownMode === "assets"
+                    ? Object.keys(ASSET_COLORS).map((key) => {
+                        const hidden = hiddenAssets.has(key);
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => toggleAsset(key)}
+                            className="px-2 py-0.5 rounded text-xs font-medium transition-opacity"
+                            style={{
+                              backgroundColor: hidden ? "transparent" : ASSET_COLORS[key] + "33",
+                              color: ASSET_COLORS[key],
+                              border: `1px solid ${ASSET_COLORS[key]}`,
+                              opacity: hidden ? 0.4 : 1,
+                            }}
+                          >
+                            {ASSET_LABELS[key]}
+                          </button>
+                        );
+                      })
+                    : Object.keys(LIABILITY_COLORS).map((key) => {
+                        const hidden = hiddenLiabilities.has(key);
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => toggleLiability(key)}
+                            className="px-2 py-0.5 rounded text-xs font-medium transition-opacity"
+                            style={{
+                              backgroundColor: hidden ? "transparent" : LIABILITY_COLORS[key] + "33",
+                              color: LIABILITY_COLORS[key],
+                              border: `1px solid ${LIABILITY_COLORS[key]}`,
+                              opacity: hidden ? 0.4 : 1,
+                            }}
+                          >
+                            {LIABILITY_LABELS[key]}
+                          </button>
+                        );
+                      })}
                 </div>
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={220}>
                   <AreaChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
@@ -341,18 +429,31 @@ export default function NetWorthHistoryPage() {
                       labelStyle={TOOLTIP_LABEL_STYLE}
                     />
                     <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                    {visibleAssets.map((key) => (
-                      <Area
-                        key={key}
-                        type="monotone"
-                        dataKey={key}
-                        name={ASSET_LABELS[key]}
-                        stackId="assets"
-                        stroke={ASSET_COLORS[key]}
-                        fill={ASSET_COLORS[key]}
-                        fillOpacity={0.7}
-                      />
-                    ))}
+                    {breakdownMode === "assets"
+                      ? visibleAssets.map((key) => (
+                          <Area
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            name={ASSET_LABELS[key]}
+                            stackId="assets"
+                            stroke={ASSET_COLORS[key]}
+                            fill={ASSET_COLORS[key]}
+                            fillOpacity={0.7}
+                          />
+                        ))
+                      : visibleLiabilities.map((key) => (
+                          <Area
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            name={LIABILITY_LABELS[key]}
+                            stackId="liabilities"
+                            stroke={LIABILITY_COLORS[key]}
+                            fill={LIABILITY_COLORS[key]}
+                            fillOpacity={0.7}
+                          />
+                        ))}
                   </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
