@@ -876,17 +876,17 @@ function CategoriesTab({
 // ─── Net Worth Fields Tab ──────────────────────────────────────────────────
 
 const NW_FIELDS = [
-  { key: "checking", defaultLabel: "Checking Account", type: "Asset" },
-  { key: "savings", defaultLabel: "Savings Account", type: "Asset" },
-  { key: "homeEquity", defaultLabel: "Home Equity", type: "Asset" },
-  { key: "retirement401k", defaultLabel: "401K / Retirement", type: "Asset" },
-  { key: "hsaHra", defaultLabel: "HSA / HRA", type: "Asset" },
-  { key: "investments", defaultLabel: "Investments", type: "Asset" },
-  { key: "plan529", defaultLabel: "529 Plan", type: "Asset" },
-  { key: "teamworksEquity", defaultLabel: "Teamworks Equity", type: "Asset" },
-  { key: "mortgageBalance", defaultLabel: "Mortgage Balance", type: "Liability" },
-  { key: "studentLoans", defaultLabel: "Student Loans", type: "Liability" },
-  { key: "personalLoans", defaultLabel: "Personal Loans", type: "Liability" },
+  { key: "checking", csvKey: "Checking", defaultLabel: "Checking", type: "Asset" },
+  { key: "savings", csvKey: "Savings", defaultLabel: "Savings", type: "Asset" },
+  { key: "homeEquity", csvKey: "Home Equity", defaultLabel: "Home Equity", type: "Asset" },
+  { key: "retirement401k", csvKey: "401K", defaultLabel: "401K", type: "Asset" },
+  { key: "hsaHra", csvKey: "HSA/HRA", defaultLabel: "HSA/HRA", type: "Asset" },
+  { key: "investments", csvKey: "Investments", defaultLabel: "Investments", type: "Asset" },
+  { key: "plan529", csvKey: "529 Plan", defaultLabel: "529 Plan", type: "Asset" },
+  { key: "teamworksEquity", csvKey: "Teamworks", defaultLabel: "Teamworks", type: "Asset" },
+  { key: "mortgageBalance", csvKey: "Mortgage Balance", defaultLabel: "Mortgage Balance", type: "Liability" },
+  { key: "studentLoans", csvKey: "Student Loans", defaultLabel: "Student Loans", type: "Liability" },
+  { key: "personalLoans", csvKey: "Personal Loans", defaultLabel: "Personal Loans", type: "Liability" },
 ] as const;
 
 function NetWorthFieldsTab() {
@@ -973,7 +973,7 @@ function NetWorthFieldsTab() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium">Field Key</th>
+                    <th className="px-3 py-2 text-left font-medium">CSV Column</th>
                     <th className="px-3 py-2 text-left font-medium">Display Label</th>
                     <th className="px-3 py-2 text-center font-medium w-24">Actions</th>
                   </tr>
@@ -982,7 +982,7 @@ function NetWorthFieldsTab() {
                   {NW_FIELDS.filter((f) => f.type === type).map((field) => (
                     editKey === field.key ? (
                       <tr key={field.key} className="border-t bg-blue-50 dark:bg-blue-950/20">
-                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{field.key}</td>
+                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{field.csvKey}</td>
                         <td className="px-2 py-1">
                           <input
                             value={editValue}
@@ -1005,7 +1005,7 @@ function NetWorthFieldsTab() {
                       </tr>
                     ) : (
                       <tr key={field.key} className="border-t hover:bg-muted/30">
-                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{field.key}</td>
+                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{field.csvKey}</td>
                         <td className="px-3 py-2 font-medium">{getLabel(field.key, field.defaultLabel)}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center justify-center gap-1">

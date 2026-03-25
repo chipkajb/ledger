@@ -9,6 +9,7 @@ import {
   Area,
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -41,12 +42,11 @@ interface Snapshot {
   totalAssets: number;
   totalLiabilities: number;
   netWorth: number;
-  delta?: number;
+  delta?: number | null;
 }
 
-// Re-export with friendly aliases for charting
 type EnrichedSnapshot = Snapshot & {
-  date: string; // alias for snapshotDate
+  date: string;
 };
 
 interface PaginatedResponse {
@@ -88,16 +88,58 @@ function todayStr() { return format(new Date(), "yyyy-MM-dd"); }
 function oneYearAgoStr() { return format(subYears(new Date(), 1), "yyyy-MM-dd"); }
 function fiveYearsAgoStr() { return format(subYears(new Date(), 5), "yyyy-MM-dd"); }
 
+const TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "8px",
+  color: "hsl(var(--card-foreground))",
+};
+const TOOLTIP_LABEL_STYLE = { color: "hsl(var(--foreground))" };
+
+function DeltaTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const value = payload[0].value;
+  const color = value > 0 ? "#22c55e" : value < 0 ? "#ef4444" : "#6b7280";
+  return (
+    <div
+      className="rounded-lg p-2 text-sm shadow-md"
+      style={TOOLTIP_CONTENT_STYLE}
+    >
+      <p className="mb-1" style={TOOLTIP_LABEL_STYLE}>
+        {label ? format(new Date(label + "T00:00:00"), "MMM d, yyyy") : ""}
+      </p>
+      <p style={{ color }}>
+        Change: {value > 0 ? "+" : ""}
+        {formatCurrency(value)}
+      </p>
+    </div>
+  );
+}
+
 export default function NetWorthHistoryPage() {
   const [from, setFrom] = useState("2023-01-01");
   const [to, setTo] = useState(todayStr());
+  // Table data (paginated)
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  // Chart data (all snapshots in date range)
+  const [allSnapshots, setAllSnapshots] = useState<Snapshot[]>([]);
+  // Asset breakdown field visibility
+  const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
+
   const LIMIT = 50;
 
-  const load = useCallback(async () => {
+  const loadTable = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ from, to, page: page.toString(), limit: LIMIT.toString() });
@@ -111,7 +153,20 @@ export default function NetWorthHistoryPage() {
     finally { setLoading(false); }
   }, [from, to, page]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadCharts = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ from, to, page: "1", limit: "10000" });
+      const res = await fetch(`/api/net-worth/snapshots?${params}`);
+      if (res.ok) {
+        const json: PaginatedResponse = await res.json();
+        // Reverse to chronological (oldest → newest) order for charts
+        setAllSnapshots([...(json.snapshots ?? [])].reverse());
+      }
+    } catch { /* ignore */ }
+  }, [from, to]);
+
+  useEffect(() => { loadTable(); }, [loadTable]);
+  useEffect(() => { loadCharts(); }, [loadCharts]);
 
   const [copiedCol, setCopiedCol] = useState<string | null>(null);
 
@@ -123,15 +178,23 @@ export default function NetWorthHistoryPage() {
     });
   }
 
-  // Enrich with date alias and delta
-  const enriched: EnrichedSnapshot[] = snapshots.map((s, i) => {
-    const prev = snapshots[i - 1];
-    return { ...s, date: s.snapshotDate, delta: prev ? s.netWorth - prev.netWorth : undefined };
-  });
+  function toggleAsset(key: string) {
+    setHiddenAssets((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
-  const deltaData = enriched
-    .filter((s) => s.delta !== undefined)
+  // Chart data: all snapshots in ascending (chronological) order
+  const chartEnriched: EnrichedSnapshot[] = allSnapshots.map((s) => ({ ...s, date: s.snapshotDate }));
+  const deltaData = chartEnriched
+    .filter((s) => s.delta !== null && s.delta !== undefined)
     .map((s) => ({ date: s.date, delta: s.delta ?? 0 }));
+
+  // Table data: paginated, newest first
+  const tableEnriched: EnrichedSnapshot[] = snapshots.map((s) => ({ ...s, date: s.snapshotDate }));
 
   const totalPages = Math.ceil(total / LIMIT);
 
@@ -140,11 +203,20 @@ export default function NetWorthHistoryPage() {
     try {
       const res = await fetch(`/api/net-worth/snapshots?id=${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      load();
+      loadTable();
+      loadCharts();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Delete failed");
     }
   }
+
+  function handleDatePreset(newFrom: string) {
+    setFrom(newFrom);
+    setTo(todayStr());
+    setPage(1);
+  }
+
+  const visibleAssets = Object.keys(ASSET_COLORS).filter((k) => !hiddenAssets.has(k));
 
   return (
     <div className="space-y-6">
@@ -160,7 +232,7 @@ export default function NetWorthHistoryPage() {
             description="Upload a CSV or Excel file. Expected columns: Date, Checking, Savings, Home Equity, 401K, HSA/HRA, Investments, 529 Plan, Teamworks, Mortgage Balance, Student Loans, Personal Loans."
             templateUrl="/templates/net-worth-template.csv"
             triggerLabel="Import CSV/XLSX"
-            onSuccess={() => load()}
+            onSuccess={() => { loadTable(); loadCharts(); }}
           />
           <ExportButton
             baseUrl="/api/export/net-worth"
@@ -181,13 +253,13 @@ export default function NetWorthHistoryPage() {
             <label className="text-sm font-medium">To</label>
             <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="w-40" />
           </div>
-          <Button variant="outline" onClick={() => { setFrom(oneYearAgoStr()); setTo(todayStr()); setPage(1); }}>
+          <Button variant="outline" onClick={() => handleDatePreset(oneYearAgoStr())}>
             Last 12 Months
           </Button>
-          <Button variant="outline" onClick={() => { setFrom(fiveYearsAgoStr()); setTo(todayStr()); setPage(1); }}>
+          <Button variant="outline" onClick={() => handleDatePreset(fiveYearsAgoStr())}>
             Last 5 Years
           </Button>
-          <Button variant="outline" onClick={() => { setFrom("2000-01-01"); setTo(todayStr()); setPage(1); }}>
+          <Button variant="outline" onClick={() => handleDatePreset("2000-01-01")}>
             All Time
           </Button>
         </CardContent>
@@ -199,7 +271,7 @@ export default function NetWorthHistoryPage() {
             <div key={i} className="h-72 animate-pulse rounded-xl bg-muted" />
           ))}
         </div>
-      ) : snapshots.length === 0 ? (
+      ) : allSnapshots.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             No snapshots found for this date range.
@@ -215,11 +287,16 @@ export default function NetWorthHistoryPage() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={enriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                  <LineChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={(l) => `Date: ${l}`} />
+                    <Tooltip
+                      formatter={(v: number) => [formatCurrency(v), "Net Worth"]}
+                      labelFormatter={(l) => format(new Date(l + "T00:00:00"), "MMM d, yyyy")}
+                      contentStyle={TOOLTIP_CONTENT_STYLE}
+                      labelStyle={TOOLTIP_LABEL_STYLE}
+                    />
                     <Line type="monotone" dataKey="netWorth" name="Net Worth" stroke="#3b82f6" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -231,16 +308,50 @@ export default function NetWorthHistoryPage() {
                 <CardTitle className="text-base">Asset Breakdown Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={260}>
-                  <AreaChart data={enriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                {/* Field toggles */}
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {Object.keys(ASSET_COLORS).map((key) => {
+                    const hidden = hiddenAssets.has(key);
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => toggleAsset(key)}
+                        className="px-2 py-0.5 rounded text-xs font-medium transition-opacity"
+                        style={{
+                          backgroundColor: hidden ? "transparent" : ASSET_COLORS[key] + "33",
+                          color: ASSET_COLORS[key],
+                          border: `1px solid ${ASSET_COLORS[key]}`,
+                          opacity: hidden ? 0.4 : 1,
+                        }}
+                      >
+                        {ASSET_LABELS[key]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={(l) => `Date: ${l}`} />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [formatCurrency(v), name]}
+                      labelFormatter={(l) => format(new Date(l + "T00:00:00"), "MMM d, yyyy")}
+                      contentStyle={TOOLTIP_CONTENT_STYLE}
+                      labelStyle={TOOLTIP_LABEL_STYLE}
+                    />
                     <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                    {Object.keys(ASSET_COLORS).map((key) => (
-                      <Area key={key} type="monotone" dataKey={key} name={ASSET_LABELS[key]}
-                        stackId="assets" stroke={ASSET_COLORS[key]} fill={ASSET_COLORS[key]} fillOpacity={0.7} />
+                    {visibleAssets.map((key) => (
+                      <Area
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        name={ASSET_LABELS[key]}
+                        stackId="assets"
+                        stroke={ASSET_COLORS[key]}
+                        fill={ASSET_COLORS[key]}
+                        fillOpacity={0.7}
+                      />
                     ))}
                   </AreaChart>
                 </ResponsiveContainer>
@@ -257,8 +368,15 @@ export default function NetWorthHistoryPage() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={(l) => `Date: ${l}`} />
-                    <Bar dataKey="delta" name="Change" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                    <Tooltip content={<DeltaTooltip />} />
+                    <Bar dataKey="delta" name="Change" radius={[2, 2, 0, 0]}>
+                      {deltaData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.delta >= 0 ? "#22c55e" : "#ef4444"}
+                        />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -270,11 +388,16 @@ export default function NetWorthHistoryPage() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={enriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                  <BarChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCurrencyShort} width={64} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} labelFormatter={(l) => `Date: ${l}`} />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [formatCurrency(v), name]}
+                      labelFormatter={(l) => format(new Date(l + "T00:00:00"), "MMM d, yyyy")}
+                      contentStyle={TOOLTIP_CONTENT_STYLE}
+                      labelStyle={TOOLTIP_LABEL_STYLE}
+                    />
                     <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="totalAssets" name="Total Assets" stackId="a" fill="#10b981" />
                     <Bar dataKey="totalLiabilities" name="Total Liabilities" stackId="b" fill="#ef4444" radius={[2, 2, 0, 0]} />
@@ -313,7 +436,7 @@ export default function NetWorthHistoryPage() {
                         { label: "401K", key: "retirement401k" as keyof Snapshot },
                         { label: "HSA/HRA", key: "hsaHra" as keyof Snapshot },
                         { label: "Investments", key: "investments" as keyof Snapshot },
-                        { label: "529", key: "plan529" as keyof Snapshot },
+                        { label: "529 Plan", key: "plan529" as keyof Snapshot },
                         { label: "Teamworks", key: "teamworksEquity" as keyof Snapshot },
                         { label: "Mortgage", key: "mortgageBalance" as keyof Snapshot },
                         { label: "Student Loans", key: "studentLoans" as keyof Snapshot },
@@ -340,7 +463,7 @@ export default function NetWorthHistoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {enriched.map((s, i) => (
+                    {tableEnriched.map((s, i) => (
                       <tr key={s.id ?? i} className="border-b last:border-0 hover:bg-muted/30 group">
                         <td className="whitespace-nowrap px-3 py-2 font-medium">{s.snapshotDate}</td>
                         <td className="whitespace-nowrap px-3 py-2">{formatCurrency(s.checking)}</td>
@@ -362,7 +485,7 @@ export default function NetWorthHistoryPage() {
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 font-semibold">{formatCurrency(s.netWorth)}</td>
                         <td className="whitespace-nowrap px-3 py-2 font-medium">
-                          {s.delta === undefined ? (
+                          {s.delta === undefined || s.delta === null ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
                             <span className={s.delta > 0 ? "text-green-600 dark:text-green-400" : s.delta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
