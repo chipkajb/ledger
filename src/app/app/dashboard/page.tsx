@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, currentMonth, isoToMonthLabel } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,23 @@ interface NetWorthSnapshot {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function formatMonthLabel(yyyymm: string): string {
+  const [y, m] = yyyymm.split("-");
+  return `${MONTH_ABBR[parseInt(m, 10) - 1]} '${y.slice(2)}`;
+}
+
+function trendWindowFromDate(window: string): string {
+  const now = new Date();
+  if (window === "6m") { now.setMonth(now.getMonth() - 6); }
+  else if (window === "1y") { now.setFullYear(now.getFullYear() - 1); }
+  else if (window === "2y") { now.setFullYear(now.getFullYear() - 2); }
+  else if (window === "5y") { now.setFullYear(now.getFullYear() - 5); }
+  else return "2010-01-01"; // "all"
+  return now.toISOString().slice(0, 10);
+}
+
 const START_YEAR = 2023;
 
 function buildMonthOptionsByYear(): Array<{ year: string; months: string[] }> {
@@ -142,6 +160,7 @@ export default function DashboardPage() {
   const [loadingBudget, setLoadingBudget] = useState(true);
   const [loadingMortgage, setLoadingMortgage] = useState(true);
   const [loadingSnapshots, setLoadingSnapshots] = useState(true);
+  const [trendWindow, setTrendWindow] = useState<"6m" | "1y" | "2y" | "5y" | "all">("all");
 
   useEffect(() => {
     fetch("/api/net-worth/latest")
@@ -152,16 +171,46 @@ export default function DashboardPage() {
 
     fetch("/api/mortgage")
       .then((r) => r.json())
-      .then(setMortgageData)
+      .then((list: any[]) => {
+        if (!Array.isArray(list) || list.length === 0) {
+          setMortgageData({ active: null, summary: null });
+          return;
+        }
+        const m = list.find((x) => x.active) ?? null;
+        if (!m) {
+          setMortgageData({ active: null, summary: null });
+          return;
+        }
+        setMortgageData({
+          active: {
+            id: m.id,
+            loanAmount: m.loanAmount,
+            housePrice: m.housePrice,
+            downPayment: m.downPayment,
+            annualRate: m.annualRate,
+            termYears: m.termYears,
+          },
+          summary: {
+            currentBalance: m.summary.currentBalance,
+            equityPercent: m.summary.currentEquityPct,
+            totalPaid: m.summary.totalPayments,
+            payoffDate: m.summary.payoffDate,
+          },
+        });
+      })
       .catch(console.error)
       .finally(() => setLoadingMortgage(false));
+  }, []);
 
-    fetch("/api/net-worth/snapshots?limit=20")
+  useEffect(() => {
+    setLoadingSnapshots(true);
+    const from = trendWindowFromDate(trendWindow);
+    fetch(`/api/net-worth/snapshots?from=${from}&limit=1000`)
       .then((r) => r.json())
       .then((d) => setSnapshots((d.snapshots ?? []).reverse()))
       .catch(console.error)
       .finally(() => setLoadingSnapshots(false));
-  }, []);
+  }, [trendWindow]);
 
   useEffect(() => {
     setLoadingBudget(true);
@@ -207,10 +256,24 @@ export default function DashboardPage() {
     }
   }
 
-  const snapshotChartData = snapshots.map((s) => ({
-    date: s.snapshotDate.slice(0, 7),
-    "Net Worth": s.netWorth,
-  }));
+  const snapshotChartData = useMemo(() => {
+    const base = snapshots.map((s) => ({
+      date: s.snapshotDate.slice(0, 7),
+      "Net Worth": s.netWorth,
+    }));
+    if (base.length < 2) return base;
+    const n = base.length;
+    const ys = base.map((d) => d["Net Worth"]);
+    const sumX = (n * (n - 1)) / 2;
+    const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+    const sumY = ys.reduce((s, y) => s + y, 0);
+    const sumXY = ys.reduce((s, y, i) => s + i * y, 0);
+    const denom = n * sumXX - sumX * sumX;
+    if (denom === 0) return base;
+    const slope = (n * sumXY - sumX * sumY) / denom;
+    const intercept = (sumY - slope * sumX) / n;
+    return base.map((d, i) => ({ ...d, Trend: Math.round(slope * i + intercept) }));
+  }, [snapshots]);
 
   return (
     <div className="space-y-6">
@@ -328,7 +391,22 @@ export default function DashboardPage() {
         {/* Net Worth Trend */}
         <Card className="col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Net Worth Trend</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Net Worth Trend</CardTitle>
+              <div className="flex gap-0.5">
+                {(["6m", "1y", "2y", "5y", "all"] as const).map((w) => (
+                  <Button
+                    key={w}
+                    variant={trendWindow === w ? "default" : "ghost"}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setTrendWindow(w)}
+                  >
+                    {w === "all" ? "All" : w.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingSnapshots ? (
@@ -344,7 +422,9 @@ export default function DashboardPage() {
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 10 }}
-                    tickFormatter={(v: string) => v.slice(5)}
+                    tickFormatter={(v: string) => formatMonthLabel(v)}
+                    interval="preserveStartEnd"
+                    minTickGap={40}
                   />
                   <YAxis
                     tick={{ fontSize: 10 }}
@@ -352,7 +432,8 @@ export default function DashboardPage() {
                     width={48}
                   />
                   <Tooltip
-                    formatter={(v: number) => [formatCurrency(v), "Net Worth"]}
+                    formatter={(v: number, name: string) => [formatCurrency(v), name]}
+                    labelFormatter={(label: string) => formatMonthLabel(label)}
                     contentStyle={{
                       backgroundColor: "hsl(var(--popover))",
                       border: "1px solid hsl(var(--border))",
@@ -366,6 +447,15 @@ export default function DashboardPage() {
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}
                     dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Trend"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    dot={false}
+                    legendType="none"
                   />
                 </LineChart>
               </ResponsiveContainer>

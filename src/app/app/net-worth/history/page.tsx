@@ -186,6 +186,9 @@ export default function NetWorthHistoryPage() {
   const [hiddenLiabilities, setHiddenLiabilities] = useState<Set<string>>(new Set());
   // Whether the breakdown chart shows assets or liabilities
   const [breakdownMode, setBreakdownMode] = useState<"assets" | "liabilities">("assets");
+  // Delta chart Y-axis manual bounds (empty string = auto)
+  const [deltaYMin, setDeltaYMin] = useState("");
+  const [deltaYMax, setDeltaYMax] = useState("");
 
   const LIMIT = 50;
 
@@ -320,8 +323,13 @@ export default function NetWorthHistoryPage() {
     return { ...d, rollingAvg: avg };
   });
 
-  // Y-axis domain clipped to 5th–95th percentile to suppress outlier distortion
+  // Y-axis domain: manual overrides if set, otherwise 5th–95th percentile
   const deltaDomain = useMemo(() => {
+    const manualMin = deltaYMin !== "" ? parseFloat(deltaYMin) : null;
+    const manualMax = deltaYMax !== "" ? parseFloat(deltaYMax) : null;
+    if (manualMin !== null && !isNaN(manualMin) && manualMax !== null && !isNaN(manualMax)) {
+      return [manualMin, manualMax] as [number, number];
+    }
     if (deltaData.length < 2) return ["auto", "auto"] as [string, string];
     const vals = [...deltaData].map((d) => d.delta).sort((a, b) => a - b);
     const n = vals.length;
@@ -331,7 +339,7 @@ export default function NetWorthHistoryPage() {
     const lo = Math.floor((p5 - pad) / 1000) * 1000;
     const hi = Math.ceil((p95 + pad) / 1000) * 1000;
     return [Math.min(lo, 0), Math.max(hi, 0)] as [number, number];
-  }, [deltaData]);
+  }, [deltaData, deltaYMin, deltaYMax]);
 
   // Table data: paginated, newest first
   const tableEnriched: EnrichedSnapshot[] = snapshots.map((s) => ({ ...s, date: s.snapshotDate }));
@@ -553,7 +561,37 @@ export default function NetWorthHistoryPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Snapshot-over-Snapshot Delta</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base">Snapshot-over-Snapshot Delta</CardTitle>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>Y-axis:</span>
+                    <Input
+                      type="number"
+                      placeholder="Min"
+                      value={deltaYMin}
+                      onChange={(e) => setDeltaYMin(e.target.value)}
+                      className="h-7 w-24 text-xs"
+                    />
+                    <span>to</span>
+                    <Input
+                      type="number"
+                      placeholder="Max"
+                      value={deltaYMax}
+                      onChange={(e) => setDeltaYMax(e.target.value)}
+                      className="h-7 w-24 text-xs"
+                    />
+                    {(deltaYMin !== "" || deltaYMax !== "") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => { setDeltaYMin(""); setDeltaYMax(""); }}
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
@@ -594,7 +632,7 @@ export default function NetWorthHistoryPage() {
                   </ComposedChart>
                 </ResponsiveContainer>
                 <p className="mt-1 text-xs text-muted-foreground text-center">
-                  <span style={{ color: "#60a5fa" }}>&#8212;</span> 4-week rolling average &nbsp;&middot;&nbsp; bars de-emphasized, axis clipped to remove outlier distortion
+                  <span style={{ color: "#60a5fa" }}>&#8212;</span> 4-week rolling average &nbsp;&middot;&nbsp; set Y-axis min/max above to clip outliers
                 </p>
               </CardContent>
             </Card>
