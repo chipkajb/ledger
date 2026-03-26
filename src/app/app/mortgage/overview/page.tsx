@@ -287,6 +287,14 @@ export default function MortgageOverviewPage() {
                 <Tooltip
                   formatter={(v: number) => formatCurrency(v)}
                   labelFormatter={(l) => `Date: ${l}`}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    color: "hsl(var(--card-foreground))",
+                  }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  itemStyle={{ color: "hsl(var(--card-foreground))" }}
                 />
                 {/* Past payments — solid */}
                 <Area
@@ -341,7 +349,17 @@ export default function MortgageOverviewPage() {
                     <Cell key={index} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip
+                  formatter={(v: number) => formatCurrency(v)}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    color: "hsl(var(--card-foreground))",
+                  }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  itemStyle={{ color: "hsl(var(--card-foreground))" }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex gap-6 text-sm">
