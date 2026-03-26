@@ -11,14 +11,16 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, currentMonth, getWeekLabel, isoToMonthLabel } from "@/lib/utils";
-import { format, subMonths } from "date-fns";
+import { format } from "date-fns";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -45,20 +47,28 @@ interface Transaction {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildMonthOptions(count = 24): string[] {
-  const options: string[] = [];
+const START_YEAR = 2023;
+
+function buildMonthOptionsByYear(): Array<{ year: string; months: string[] }> {
   const now = new Date();
-  for (let i = 0; i < count; i++) {
-    options.push(format(subMonths(now, i), "yyyy-MM"));
+  const currentYear = now.getFullYear();
+  const result: Array<{ year: string; months: string[] }> = [];
+  for (let y = currentYear; y >= START_YEAR; y--) {
+    const maxMonth = y === currentYear ? now.getMonth() + 1 : 12;
+    const months: string[] = [];
+    for (let m = maxMonth; m >= 1; m--) {
+      months.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+    if (months.length > 0) result.push({ year: String(y), months });
   }
-  return options;
+  return result;
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function EnterExpensesPage() {
-  const monthOptions = buildMonthOptions(24);
-  const [selectedMonth, setSelectedMonth] = useState<string>(monthOptions[0]);
+  const monthOptionsByYear = buildMonthOptionsByYear();
+  const [selectedMonth, setSelectedMonth] = useState<string>(monthOptionsByYear[0].months[0]);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -311,10 +321,15 @@ export default function EnterExpensesPage() {
             <SelectValue placeholder="Select month" />
           </SelectTrigger>
           <SelectContent>
-            {monthOptions.map((m) => (
-              <SelectItem key={m} value={m}>
-                {isoToMonthLabel(m)}
-              </SelectItem>
+            {monthOptionsByYear.map(({ year, months }) => (
+              <SelectGroup key={year}>
+                <SelectLabel>{year}</SelectLabel>
+                {months.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {isoToMonthLabel(m)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             ))}
           </SelectContent>
         </Select>
