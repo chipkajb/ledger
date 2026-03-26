@@ -327,10 +327,14 @@ export default function NetWorthHistoryPage() {
   const deltaDomain = useMemo(() => {
     const manualMin = deltaYMin !== "" ? parseFloat(deltaYMin) : null;
     const manualMax = deltaYMax !== "" ? parseFloat(deltaYMax) : null;
-    if (manualMin !== null && !isNaN(manualMin) && manualMax !== null && !isNaN(manualMax)) {
+    const hasManualMin = manualMin !== null && !isNaN(manualMin);
+    const hasManualMax = manualMax !== null && !isNaN(manualMax);
+    if (hasManualMin && hasManualMax) {
       return [manualMin, manualMax] as [number, number];
     }
-    if (deltaData.length < 2) return ["auto", "auto"] as [string, string];
+    if (deltaData.length < 2) {
+      return [hasManualMin ? manualMin : "auto", hasManualMax ? manualMax : "auto"] as [(number | string), (number | string)];
+    }
     const vals = [...deltaData].map((d) => d.delta).sort((a, b) => a - b);
     const n = vals.length;
     const p5 = vals[Math.max(0, Math.floor(n * 0.05))];
@@ -338,7 +342,10 @@ export default function NetWorthHistoryPage() {
     const pad = Math.abs(p95 - p5) * 0.3 || 5000;
     const lo = Math.floor((p5 - pad) / 1000) * 1000;
     const hi = Math.ceil((p95 + pad) / 1000) * 1000;
-    return [Math.min(lo, 0), Math.max(hi, 0)] as [number, number];
+    return [
+      hasManualMin ? manualMin : Math.min(lo, 0),
+      hasManualMax ? manualMax : Math.max(hi, 0),
+    ] as [number, number];
   }, [deltaData, deltaYMin, deltaYMax]);
 
   // Table data: paginated, newest first
@@ -607,6 +614,7 @@ export default function NetWorthHistoryPage() {
                       tickFormatter={formatCurrencyShort}
                       width={64}
                       domain={deltaDomain}
+                      allowDataOverflow={true}
                     />
                     <Tooltip content={<DeltaTooltip />} />
                     <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1} />
