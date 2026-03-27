@@ -125,7 +125,7 @@ export default function EnterExpensesPage() {
   const groupKeys = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
 
   const formCategoryOptions = useMemo(() =>
-    formGroup ? (parentGroups[formGroup] ?? []) : [],
+    formGroup ? (parentGroups[formGroup] ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)) : [],
     [formGroup, parentGroups]);
 
   const monthlyExpenses = transactions
@@ -212,7 +212,7 @@ export default function EnterExpensesPage() {
   const pasteGroupOptions = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
 
   const pasteCategoryOptions = useMemo(() =>
-    pasteGroup && pasteGroup !== NEW_SENTINEL ? (parentGroups[pasteGroup] ?? []) : [],
+    pasteGroup && pasteGroup !== NEW_SENTINEL ? (parentGroups[pasteGroup] ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)) : [],
     [pasteGroup, parentGroups]);
 
   const parsedAmounts = useMemo(() => {
@@ -469,7 +469,7 @@ export default function EnterExpensesPage() {
                 No transactions for this month yet.
               </p>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y max-h-96 overflow-y-auto">
                 {transactions.map((tx) => (
                   <div key={tx.id} className="flex items-center justify-between py-2 text-sm">
                     <div className="min-w-0 flex-1">
