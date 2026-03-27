@@ -256,12 +256,12 @@ export default function DashboardPage() {
     }
   }
 
-  const snapshotChartData = useMemo(() => {
+  const { snapshotChartData, trendSlopePerMonth } = useMemo(() => {
     const base = snapshots.map((s) => ({
       date: s.snapshotDate.slice(0, 7),
       "Net Worth": s.netWorth,
     }));
-    if (base.length < 2) return base;
+    if (base.length < 2) return { snapshotChartData: base, trendSlopePerMonth: null };
     const n = base.length;
     const ys = base.map((d) => d["Net Worth"]);
     const sumX = (n * (n - 1)) / 2;
@@ -269,10 +269,17 @@ export default function DashboardPage() {
     const sumY = ys.reduce((s, y) => s + y, 0);
     const sumXY = ys.reduce((s, y, i) => s + i * y, 0);
     const denom = n * sumXX - sumX * sumX;
-    if (denom === 0) return base;
+    if (denom === 0) return { snapshotChartData: base, trendSlopePerMonth: null };
     const slope = (n * sumXY - sumX * sumY) / denom;
     const intercept = (sumY - slope * sumX) / n;
-    return base.map((d, i) => ({ ...d, Trend: Math.round(slope * i + intercept) }));
+    const firstMs = new Date(base[0].date + "-01").getTime();
+    const lastMs = new Date(base[n - 1].date + "-01").getTime();
+    const monthSpan = (lastMs - firstMs) / (1000 * 60 * 60 * 24 * 30.44);
+    const slopePerMonth = monthSpan > 0 ? Math.round(slope * (n - 1) / monthSpan) : Math.round(slope);
+    return {
+      snapshotChartData: base.map((d, i) => ({ ...d, Trend: Math.round(slope * i + intercept) })),
+      trendSlopePerMonth: slopePerMonth,
+    };
   }, [snapshots]);
 
   return (
@@ -392,7 +399,14 @@ export default function DashboardPage() {
         <Card className="col-span-1">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Net Worth Trend</CardTitle>
+              <div>
+                <CardTitle className="text-sm font-medium">Net Worth Trend</CardTitle>
+                {trendSlopePerMonth != null && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {trendSlopePerMonth >= 0 ? "+" : "−"}${Math.abs(trendSlopePerMonth) >= 1000 ? `${(Math.abs(trendSlopePerMonth) / 1000).toFixed(1)}k` : Math.abs(trendSlopePerMonth)}/mo
+                  </p>
+                )}
+              </div>
               <div className="flex gap-0.5">
                 {(["6m", "1y", "2y", "5y", "all"] as const).map((w) => (
                   <Button

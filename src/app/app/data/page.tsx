@@ -81,7 +81,7 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
   const groupKeys = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
 
   const filteredCatOptions = useMemo(() =>
-    filterGroupKey === ALL ? categories : (parentGroups[filterGroupKey] ?? []),
+    (filterGroupKey === ALL ? categories : (parentGroups[filterGroupKey] ?? [])).slice().sort((a, b) => a.name.localeCompare(b.name)),
     [filterGroupKey, categories, parentGroups]);
 
   const loadRows = useCallback(async () => {
@@ -379,10 +379,10 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(parentGroups).map(([parent, cats]) => (
+                  {Object.entries(parentGroups).sort(([a], [b]) => a.localeCompare(b)).map(([parent, cats]) => (
                     <SelectGroup key={parent}>
                       <SelectLabel>{parent}</SelectLabel>
-                      {cats.map((c) => (
+                      {cats.slice().sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                       ))}
                     </SelectGroup>

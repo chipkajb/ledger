@@ -65,10 +65,12 @@ interface YearlyData {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const START_YEAR = 2023;
+
 function buildYearOptions(): string[] {
   const now = new Date();
   const years: string[] = [];
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 10; y--) {
+  for (let y = now.getFullYear(); y >= START_YEAR; y--) {
     years.push(String(y));
   }
   return years;
@@ -262,6 +264,7 @@ export default function YearlyBudgetPage() {
                       {monthAbbr(m.month)}
                     </th>
                   ))}
+                  <th className="py-2 px-2 text-right font-medium text-muted-foreground">Avg/mo</th>
                   <th className="py-2 pl-2 pr-4 text-right font-semibold">Total</th>
                 </tr>
               </thead>
@@ -273,6 +276,7 @@ export default function YearlyBudgetPage() {
                       {m.income === 0 ? <span className="text-muted-foreground">—</span> : formatCurrency(m.income)}
                     </td>
                   ))}
+                  <td className="py-2 px-2 text-right font-medium text-muted-foreground">{months.length ? formatCurrency(yearTotals.income / months.length) : "—"}</td>
                   <td className="py-2 pl-2 pr-4 text-right font-semibold">{formatCurrency(yearTotals.income)}</td>
                 </tr>
                 <tr className="border-b hover:bg-muted/30">
@@ -282,6 +286,7 @@ export default function YearlyBudgetPage() {
                       {m.expenses === 0 ? <span className="text-muted-foreground">—</span> : formatCurrency(m.expenses)}
                     </td>
                   ))}
+                  <td className="py-2 px-2 text-right font-medium text-muted-foreground">{months.length ? formatCurrency(yearTotals.expenses / months.length) : "—"}</td>
                   <td className="py-2 pl-2 pr-4 text-right font-semibold">{formatCurrency(yearTotals.expenses)}</td>
                 </tr>
                 <tr className="hover:bg-muted/30">
@@ -293,6 +298,11 @@ export default function YearlyBudgetPage() {
                       {m.netGain === 0 ? "—" : formatCurrency(m.netGain)}
                     </td>
                   ))}
+                  {(() => { const avg = months.length ? yearTotals.netGain / months.length : null; return (
+                    <td className={`py-2 px-2 text-right font-medium ${avg == null ? "text-muted-foreground" : avg >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {avg == null ? "—" : formatCurrency(avg)}
+                    </td>
+                  ); })()}
                   <td className={`py-2 pl-2 pr-4 text-right font-bold ${
                     yearTotals.netGain >= 0 ? "text-green-600" : "text-red-600"
                   }`}>
@@ -324,7 +334,15 @@ export default function YearlyBudgetPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={52} />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip
+                    formatter={(v: number) => formatCurrency(v)}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      color: "hsl(var(--popover-foreground))",
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[2, 2, 0, 0]} stackId="a" />
                   <Bar dataKey="Expenses" fill="hsl(0, 72%, 51%)" radius={[2, 2, 0, 0]} stackId="b" />
@@ -351,7 +369,15 @@ export default function YearlyBudgetPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={52} />
-                  <Tooltip formatter={(v: number) => [formatCurrency(v), "Net Gain"]} />
+                  <Tooltip
+                    formatter={(v: number) => [formatCurrency(v), "Net Gain"]}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      color: "hsl(var(--popover-foreground))",
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line
                     type="monotone"
