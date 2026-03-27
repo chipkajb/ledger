@@ -276,7 +276,7 @@ export default function YearlyBudgetPage() {
                       {m.income === 0 ? <span className="text-muted-foreground">—</span> : formatCurrency(m.income)}
                     </td>
                   ))}
-                  <td className="py-2 px-2 text-right font-medium text-muted-foreground">{months.length ? formatCurrency(yearTotals.income / months.length) : "—"}</td>
+                  <td className="py-2 px-2 text-right font-medium text-muted-foreground">{(() => { const n = months.filter(m => m.income !== 0).length; return n ? formatCurrency(yearTotals.income / n) : "—"; })()}</td>
                   <td className="py-2 pl-2 pr-4 text-right font-semibold">{formatCurrency(yearTotals.income)}</td>
                 </tr>
                 <tr className="border-b hover:bg-muted/30">
@@ -286,7 +286,7 @@ export default function YearlyBudgetPage() {
                       {m.expenses === 0 ? <span className="text-muted-foreground">—</span> : formatCurrency(m.expenses)}
                     </td>
                   ))}
-                  <td className="py-2 px-2 text-right font-medium text-muted-foreground">{months.length ? formatCurrency(yearTotals.expenses / months.length) : "—"}</td>
+                  <td className="py-2 px-2 text-right font-medium text-muted-foreground">{(() => { const n = months.filter(m => m.expenses !== 0).length; return n ? formatCurrency(yearTotals.expenses / n) : "—"; })()}</td>
                   <td className="py-2 pl-2 pr-4 text-right font-semibold">{formatCurrency(yearTotals.expenses)}</td>
                 </tr>
                 <tr className="hover:bg-muted/30">
@@ -298,7 +298,7 @@ export default function YearlyBudgetPage() {
                       {m.netGain === 0 ? "—" : formatCurrency(m.netGain)}
                     </td>
                   ))}
-                  {(() => { const avg = months.length ? yearTotals.netGain / months.length : null; return (
+                  {(() => { const n = months.filter(m => m.income !== 0 || m.expenses !== 0).length; const avg = n ? yearTotals.netGain / n : null; return (
                     <td className={`py-2 px-2 text-right font-medium ${avg == null ? "text-muted-foreground" : avg >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {avg == null ? "—" : formatCurrency(avg)}
                     </td>
