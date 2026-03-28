@@ -21,6 +21,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency } from "@/lib/utils";
@@ -180,6 +181,7 @@ export default function NetWorthHistoryPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   // Chart data (all snapshots in date range)
   const [allSnapshots, setAllSnapshots] = useState<Snapshot[]>([]);
   // Asset/liability breakdown field visibility
@@ -191,12 +193,11 @@ export default function NetWorthHistoryPage() {
   const [deltaYMin, setDeltaYMin] = useState("");
   const [deltaYMax, setDeltaYMax] = useState("");
 
-  const LIMIT = 50;
 
   const loadTable = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from, to, page: page.toString(), limit: LIMIT.toString() });
+      const params = new URLSearchParams({ from, to, page: page.toString(), limit: pageSize.toString() });
       const res = await fetch(`/api/net-worth/snapshots?${params}`);
       if (res.ok) {
         const json: PaginatedResponse = await res.json();
@@ -205,7 +206,7 @@ export default function NetWorthHistoryPage() {
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, [from, to, page]);
+  }, [from, to, page, pageSize]);
 
   const loadCharts = useCallback(async () => {
     try {
@@ -377,7 +378,7 @@ export default function NetWorthHistoryPage() {
   // Table data: paginated, newest first
   const tableEnriched: EnrichedSnapshot[] = snapshots.map((s) => ({ ...s, date: s.snapshotDate }));
 
-  const totalPages = Math.ceil(total / LIMIT);
+  const totalPages = Math.ceil(total / pageSize);
 
   async function handleDeleteSnapshot(id: string) {
     if (!confirm("Delete this snapshot?")) return;
@@ -905,11 +906,29 @@ export default function NetWorthHistoryPage() {
               </div>
 
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between border-t px-4 py-3">
-                  <span className="text-sm text-muted-foreground">
-                    Page {page} of {totalPages} ({total} total)
-                  </span>
+              {total > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-muted-foreground">
+                      Page {page} of {Math.max(totalPages, 1)} ({total} total)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground">Rows:</label>
+                      <Select
+                        value={String(pageSize)}
+                        onValueChange={(v) => { setPageSize(parseInt(v)); setPage(1); }}
+                      >
+                        <SelectTrigger className="h-7 w-16 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[10, 25, 50, 100].map((n) => (
+                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                       Previous

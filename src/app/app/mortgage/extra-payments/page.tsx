@@ -45,7 +45,6 @@ export default function ExtraPaymentsPage() {
   // Form state
   const [formDate, setFormDate] = useState(currentDate());
   const [formAmount, setFormAmount] = useState("");
-  const [formNote, setFormNote] = useState("");
 
   // Import state
   const [importing, setImporting] = useState(false);
@@ -112,7 +111,6 @@ export default function ExtraPaymentsPage() {
         body: JSON.stringify({
           paymentDate: formDate,
           amount,
-          note: formNote.trim() || undefined,
         }),
       });
       if (!res.ok) {
@@ -121,7 +119,6 @@ export default function ExtraPaymentsPage() {
       }
       toast.success("Extra payment added");
       setFormAmount("");
-      setFormNote("");
       setFormDate(currentDate());
       await loadExtraPayments();
       await loadMortgages();
@@ -241,7 +238,7 @@ export default function ExtraPaymentsPage() {
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Total Extra Paid
@@ -257,41 +254,41 @@ export default function ExtraPaymentsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Interest Saved
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {formatCurrency(summary?.moneySaved ?? 0)}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Months Saved
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {summary?.monthsSaved ?? 0}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">months off loan term</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-amber-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               New Payoff Date
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
               {summary?.payoffDate
                 ? format(new Date(summary.payoffDate + "T00:00:00"), "MMM yyyy")
                 : "—"}
@@ -358,16 +355,6 @@ export default function ExtraPaymentsPage() {
                 />
               </div>
             </div>
-            <div className="flex-1 space-y-1 min-w-48">
-              <label className="text-sm font-medium">Note (optional)</label>
-              <Input
-                type="text"
-                placeholder="e.g. tax refund"
-                value={formNote}
-                onChange={(e) => setFormNote(e.target.value)}
-                maxLength={200}
-              />
-            </div>
             <Button type="submit" disabled={submitting}>
               {submitting ? "Adding..." : "Add Payment"}
             </Button>
@@ -383,7 +370,7 @@ export default function ExtraPaymentsPage() {
         <CardContent>
           <p className="mb-3 text-sm text-muted-foreground">
             Upload a CSV or XLSX file with columns: <span className="font-medium">Date</span>,{" "}
-            <span className="font-medium">Amount</span>, <span className="font-medium">Note</span> (optional).
+            <span className="font-medium">Amount</span>.
             Dates should be in YYYY-MM-DD or M/D/YYYY format.
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -435,7 +422,6 @@ export default function ExtraPaymentsPage() {
                   <tr className="border-b bg-muted/50">
                     <th className="px-4 py-2 text-left font-medium text-muted-foreground">Date</th>
                     <th className="px-4 py-2 text-left font-medium text-muted-foreground">Amount</th>
-                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Note</th>
                     <th className="px-4 py-2 text-right font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
@@ -450,9 +436,6 @@ export default function ExtraPaymentsPage() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2 font-medium text-green-600 dark:text-green-400">
                           {formatCurrency(payment.amount)}
-                        </td>
-                        <td className="px-4 py-2 text-muted-foreground">
-                          {payment.note ?? <span className="italic">—</span>}
                         </td>
                         <td className="px-4 py-2 text-right">
                           <Button
@@ -474,7 +457,7 @@ export default function ExtraPaymentsPage() {
                     <td className="px-4 py-2 font-semibold text-green-600 dark:text-green-400">
                       {formatCurrency(totalExtra)}
                     </td>
-                    <td colSpan={2} />
+                    <td />
                   </tr>
                 </tfoot>
               </table>

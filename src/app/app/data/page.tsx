@@ -65,7 +65,6 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
   const [editMonth, setEditMonth] = useState("");
   const [editCatId, setEditCatId] = useState("");
   const [editAmount, setEditAmount] = useState("");
-  const [editDesc, setEditDesc] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -173,7 +172,6 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
     setEditMonth(tx.date.slice(0, 7));
     setEditCatId(String(tx.categoryId));
     setEditAmount(String(tx.amount));
-    setEditDesc(tx.description ?? "");
     setEditError(null);
   }
 
@@ -192,10 +190,12 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
           month: editMonth,
           categoryId: parseInt(editCatId),
           amount: amt,
-          description: editDesc.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Save failed");
+      }
       setEditTx(null);
       await loadRows();
     } catch (e) {
@@ -308,18 +308,17 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
               <th className="px-3 py-2 text-left font-medium">Group</th>
               <th className="px-3 py-2 text-left font-medium">Category</th>
               <th className="px-3 py-2 text-right font-medium">Amount</th>
-              <th className="px-3 py-2 text-left font-medium">Description</th>
               <th className="px-3 py-2 text-center font-medium w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">Loading…</td>
+                <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Loading…</td>
               </tr>
             ) : displayRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">No transactions found.</td>
+                <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No transactions found.</td>
               </tr>
             ) : (
               displayRows.map((row) => (
@@ -338,7 +337,6 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
                   <td className={`px-3 py-2 text-right font-medium whitespace-nowrap ${row.isIncomeSource ? "text-green-600" : ""}`}>
                     {formatCurrency(row.amount)}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">{row.description}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => openEdit(row)} className="p-1 hover:text-blue-600 transition-colors" title="Edit">
@@ -379,14 +377,12 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(parentGroups).sort(([a], [b]) => a.localeCompare(b)).map(([parent, cats]) => (
-                    <SelectGroup key={parent}>
-                      <SelectLabel>{parent}</SelectLabel>
-                      {cats.slice().sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
+                  {categories
+                    .slice()
+                    .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
+                    .map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.parentCategory} / {c.name}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -398,15 +394,6 @@ function TransactionsTab({ categories }: { categories: Category[] }) {
                 min="0.01"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Description</label>
-              <input
-                type="text"
-                value={editDesc}
-                onChange={(e) => setEditDesc(e.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
@@ -676,7 +663,6 @@ function CategoriesTab({
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Name</th>
                     <th className="px-3 py-2 text-left font-medium">Group</th>
-                    <th className="px-3 py-2 text-center font-medium">Sort</th>
                     <th className="px-3 py-2 text-center font-medium">Type</th>
                     <th className="px-3 py-2 text-center font-medium w-20">Actions</th>
                   </tr>
@@ -704,14 +690,6 @@ function CategoriesTab({
                           </datalist>
                         </td>
                         <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            value={editSort}
-                            onChange={(e) => setEditSort(e.target.value)}
-                            className="h-7 w-16 rounded border border-input bg-background px-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
-                        </td>
-                        <td className="px-2 py-1">
                           <label className="flex items-center gap-1 cursor-pointer text-xs">
                             <input type="checkbox" checked={editIsIncome} onChange={(e) => setEditIsIncome(e.target.checked)} className="h-3 w-3" />
                             Income
@@ -733,7 +711,6 @@ function CategoriesTab({
                       <tr key={cat.id} className="border-t hover:bg-muted/30">
                         <td className="px-3 py-2 font-medium">{cat.name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{cat.parentCategory}</td>
-                        <td className="px-3 py-2 text-center text-muted-foreground">{cat.sortOrder}</td>
                         <td className="px-3 py-2 text-center text-xs text-muted-foreground">
                           {cat.isIncomeSource ? "Income" : "Expense"}
                         </td>
@@ -842,16 +819,6 @@ function CategoriesTab({
                   {existingGroups.map((g) => <option key={g} value={g} />)}
                 </datalist>
               </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Sort Order</label>
-              <input
-                type="number"
-                value={addSort}
-                onChange={(e) => setAddSort(e.target.value)}
-                placeholder="0"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              />
             </div>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer text-sm">

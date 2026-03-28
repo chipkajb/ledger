@@ -196,6 +196,51 @@ export default function EnterExpensesPage() {
     }
   }
 
+  // ── Inline editing ─────────────────────────────────────────────────────────
+  const [editingTxId, setEditingTxId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ categoryId: "", amount: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function handleStartEdit(tx: Transaction) {
+    setEditingTxId(tx.id);
+    setEditForm({ categoryId: String(tx.categoryId), amount: String(tx.amount) });
+  }
+
+  function handleCancelEdit() {
+    setEditingTxId(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingTxId) return;
+    const amountNum = parseFloat(editForm.amount);
+    if (isNaN(amountNum) || amountNum === 0) {
+      alert("Amount must be a non-zero number.");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const tx = transactions.find((t) => t.id === editingTxId)!;
+      const res = await fetch("/api/budget/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingTxId,
+          date: tx.date,
+          categoryId: parseInt(editForm.categoryId),
+          amount: amountNum,
+          description: tx.description,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setEditingTxId(null);
+      loadTransactions(selectedMonth);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   // ── Paste Row state ────────────────────────────────────────────────────────
   const [pasteMonth, setPasteMonth] = useState(currentMonth());
   const [pasteGroup, setPasteGroup] = useState<string>("");
@@ -337,7 +382,7 @@ export default function EnterExpensesPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Transaction Form */}
-        <Card>
+        <Card className="border-t-4 border-t-blue-500">
           <CardHeader>
             <CardTitle className="text-base">Add Transaction</CardTitle>
           </CardHeader>
@@ -428,7 +473,7 @@ export default function EnterExpensesPage() {
         </Card>
 
         {/* Transaction List */}
-        <Card>
+        <Card className="border-t-4 border-t-emerald-500">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base">
               {isoToMonthLabel(selectedMonth)}
@@ -439,7 +484,7 @@ export default function EnterExpensesPage() {
                   In: {formatCurrency(monthlyIncome)}
                 </span>
               )}
-              <span className="font-semibold">
+              <span className="font-semibold text-red-500">
                 Out: {formatCurrency(monthlyExpenses)}
               </span>
             </div>
@@ -457,33 +502,86 @@ export default function EnterExpensesPage() {
               </p>
             ) : (
               <div className="divide-y max-h-96 overflow-y-auto">
-                {transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between py-2 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-medium ${tx.isIncomeSource ? "text-green-600" : ""}`}>
-                          {formatCurrency(tx.amount)}
-                        </span>
-                        <span className="text-muted-foreground truncate">
-                          {tx.categoryName}
-                        </span>
+                {transactions.map((tx) => {
+                  const isEditing = editingTxId === tx.id;
+                  if (isEditing) {
+                    return (
+                      <div key={tx.id} className="flex items-center gap-2 py-2 bg-muted/30">
+                        <Select
+                          value={editForm.categoryId}
+                          onValueChange={(v) => setEditForm((f) => ({ ...f, categoryId: v }))}
+                        >
+                          <SelectTrigger className="h-7 flex-1 text-xs">
+                            <SelectValue placeholder="Category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories
+                              .slice()
+                              .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
+                              .map((cat) => (
+                                <SelectItem key={cat.id} value={String(cat.id)}>
+                                  {cat.parentCategory} / {cat.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editForm.amount}
+                          onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                          className="h-7 w-24 rounded-md border border-input bg-background px-2 py-1 text-xs text-right shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <button
+                          onClick={handleSaveEdit}
+                          disabled={savingEdit}
+                          className="text-xs text-green-600 hover:text-green-800 px-1 font-medium"
+                          title="Save"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          className="text-xs text-muted-foreground hover:text-foreground px-1"
+                          title="Cancel"
+                        >
+                          ✕
+                        </button>
                       </div>
-                      {tx.description && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {tx.description}
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(tx.id)}
-                      className="ml-2 h-7 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    );
+                  }
+                  return (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between py-2 text-sm cursor-pointer hover:bg-muted/30"
+                      onClick={() => handleStartEdit(tx)}
                     >
-                      ✕
-                    </Button>
-                  </div>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-medium ${tx.isIncomeSource ? "text-green-600" : ""}`}>
+                            {formatCurrency(tx.amount)}
+                          </span>
+                          <span className="text-muted-foreground truncate">
+                            {tx.categoryName}
+                          </span>
+                        </div>
+                        {tx.description && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {tx.description}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(tx.id); }}
+                        className="ml-2 h-7 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

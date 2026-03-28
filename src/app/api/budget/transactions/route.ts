@@ -89,25 +89,35 @@ export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const { id, month, ...rest } = body;
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  try {
+    const body = await req.json();
+    const { id, month, ...rest } = body;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  const db = getDb();
+    const db = getDb();
 
-  const updates: Record<string, unknown> = { ...rest };
-  if (month) {
-    updates.date = `${month}-01`;
-    updates.weekLabel = getWeekLabel(`${month}-01`);
+    const updates: Record<string, unknown> = { ...rest };
+    if (month) {
+      updates.date = `${month}-01`;
+      updates.weekLabel = getWeekLabel(`${month}-01`);
+    }
+    // Normalize description: never store null (schema expects string)
+    if ("description" in updates && (updates.description === null || updates.description === undefined)) {
+      updates.description = "";
+    }
+
+    const [tx] = await db
+      .update(transactions)
+      .set(updates)
+      .where(eq(transactions.id, id))
+      .returning();
+
+    if (!tx) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    return NextResponse.json(tx);
+  } catch (err) {
+    console.error("PATCH /api/budget/transactions error:", err);
+    return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
   }
-
-  const [tx] = await db
-    .update(transactions)
-    .set(updates)
-    .where(eq(transactions.id, id))
-    .returning();
-
-  return NextResponse.json(tx);
 }
 
 export async function DELETE(req: NextRequest) {
