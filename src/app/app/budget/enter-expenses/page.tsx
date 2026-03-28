@@ -146,8 +146,8 @@ export default function EnterExpensesPage() {
     }
 
     const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      setFormError("Amount must be a positive number.");
+    if (isNaN(amountNum) || amountNum === 0) {
+      setFormError("Amount must be a non-zero number.");
       return;
     }
 
@@ -408,24 +408,11 @@ export default function EnterExpensesPage() {
                 <input
                   type="number"
                   step="0.01"
-                  min="0.01"
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   required
-                />
-              </div>
-
-              {/* Description */}
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Description</label>
-                <input
-                  type="text"
-                  placeholder="Optional note"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 

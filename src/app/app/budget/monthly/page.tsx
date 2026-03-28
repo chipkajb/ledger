@@ -231,8 +231,8 @@ function QuickAddTransaction({
     e.preventDefault();
     setError(null);
     const amountNum = parseFloat(amount);
-    if (!date || !categoryId || isNaN(amountNum) || amountNum <= 0) {
-      setError("Date, category, and a positive amount are required.");
+    if (!date || !categoryId || isNaN(amountNum) || amountNum === 0) {
+      setError("Date, category, and a non-zero amount are required.");
       return;
     }
     setSubmitting(true);
@@ -298,22 +298,11 @@ function QuickAddTransaction({
         <input
           type="number"
           step="0.01"
-          min="0.01"
           placeholder="0.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="flex h-8 w-28 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           required
-        />
-      </div>
-      <div className="space-y-1 flex-1 min-w-[160px]">
-        <label className="text-xs font-medium text-muted-foreground">Description</label>
-        <input
-          type="text"
-          placeholder="Optional"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
       <div className="space-y-1">
