@@ -220,13 +220,6 @@ function QuickAddTransaction({
     if (first && !categoryId) setCategoryId(String(first.id));
   }, [categories]);
 
-  const parentGroups = categories.reduce<Record<string, Category[]>>((acc, cat) => {
-    const key = cat.parentCategory ?? "Other";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(cat);
-    return acc;
-  }, {});
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -281,15 +274,14 @@ function QuickAddTransaction({
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(parentGroups).map(([parent, cats]) => (
-              <optgroup key={parent} label={parent}>
-                {cats.map((cat) => (
-                  <SelectItem key={cat.id} value={String(cat.id)}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </optgroup>
-            ))}
+            {categories
+              .slice()
+              .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
+              .map((cat) => (
+                <SelectItem key={cat.id} value={String(cat.id)}>
+                  {cat.parentCategory} / {cat.name}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
@@ -333,7 +325,7 @@ export default function MonthlyBudgetPage() {
   const [hideEmpty, setHideEmpty] = useState(false);
 
   const [editingTxId, setEditingTxId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ date: "", categoryId: "", amount: "", description: "" });
+  const [editForm, setEditForm] = useState({ month: "", categoryId: "", amount: "" });
   const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
@@ -370,10 +362,9 @@ export default function MonthlyBudgetPage() {
   function handleStartEdit(tx: Transaction) {
     setEditingTxId(tx.id);
     setEditForm({
-      date: tx.date,
+      month: tx.date.slice(0, 7),
       categoryId: String(tx.categoryId),
       amount: String(tx.amount),
-      description: tx.description ?? "",
     });
   }
 
@@ -395,13 +386,15 @@ export default function MonthlyBudgetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editingTxId,
-          date: editForm.date,
+          month: editForm.month,
           categoryId: parseInt(editForm.categoryId),
           amount: amountNum,
-          description: editForm.description.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error("Save failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Save failed");
+      }
       setEditingTxId(null);
       loadData();
     } catch (err) {
@@ -440,7 +433,9 @@ export default function MonthlyBudgetPage() {
     { id: "all", name: "All Categories" },
     ...Array.from(
       new Map(transactions.map((t) => [t.categoryId, t.categoryName])).entries()
-    ).map(([id, name]) => ({ id: String(id), name })),
+    )
+      .map(([id, name]) => ({ id: String(id), name }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   ];
 
   const filteredTx =
@@ -500,36 +495,36 @@ export default function MonthlyBudgetPage() {
         </div>
       ) : summary ? (
         <div className="grid grid-cols-3 gap-4">
-          <Card>
+          <Card className="border-l-4 border-l-emerald-500">
             <CardHeader className="pb-1">
               <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Actual Income
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold">{formatCurrency(summary.totalIncome)}</div>
+              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(summary.totalIncome)}</div>
               <IncomeDiffBadge curr={summary.totalIncome} prev={prevSummary?.totalIncome} />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-l-4 border-l-red-500">
             <CardHeader className="pb-1">
               <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Actual Expenses
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold">{formatCurrency(summary.totalExpenses)}</div>
+              <div className="text-xl font-bold text-red-500 dark:text-red-400">{formatCurrency(summary.totalExpenses)}</div>
               <DiffBadge curr={summary.totalExpenses} prev={prevSummary?.totalExpenses} />
             </CardContent>
           </Card>
-          <Card>
+          <Card className={`border-l-4 ${summary.netGain >= 0 ? "border-l-blue-500" : "border-l-red-500"}`}>
             <CardHeader className="pb-1">
               <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Net Gain
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-xl font-bold ${summary.netGain >= 0 ? "text-green-600" : "text-red-600"}`}>
+              <div className={`text-xl font-bold ${summary.netGain >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600"}`}>
                 {formatCurrency(summary.netGain)}
               </div>
               <IncomeDiffBadge curr={summary.netGain} prev={prevSummary?.netGain} />
@@ -649,9 +644,8 @@ export default function MonthlyBudgetPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Month</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead>Description</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -659,51 +653,34 @@ export default function MonthlyBudgetPage() {
               <TableBody>
                 {filteredTx.map((tx) => {
                   const isEditing = editingTxId === tx.id;
-                  const editParentGroups = categories.reduce<Record<string, Category[]>>((acc, cat) => {
-                    const key = cat.parentCategory ?? "Other";
-                    if (!acc[key]) acc[key] = [];
-                    acc[key].push(cat);
-                    return acc;
-                  }, {});
 
                   if (isEditing) {
                     return (
                       <TableRow key={tx.id} className="bg-muted/30">
                         <TableCell className="py-1">
                           <input
-                            type="date"
-                            value={editForm.date}
-                            onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                            type="month"
+                            value={editForm.month}
+                            onChange={(e) => setEditForm((f) => ({ ...f, month: e.target.value }))}
                             className="flex h-7 w-32 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                           />
                         </TableCell>
                         <TableCell className="py-1">
                           <Select value={editForm.categoryId} onValueChange={(v) => setEditForm((f) => ({ ...f, categoryId: v }))}>
-                            <SelectTrigger className="h-7 w-44 text-xs">
+                            <SelectTrigger className="h-7 w-52 text-xs">
                               <SelectValue placeholder="Category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {Object.entries(editParentGroups).map(([parent, cats]) => (
-                                <SelectGroup key={parent}>
-                                  <SelectLabel>{parent}</SelectLabel>
-                                  {cats.map((cat) => (
-                                    <SelectItem key={cat.id} value={String(cat.id)}>
-                                      {cat.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectGroup>
-                              ))}
+                              {categories
+                                .slice()
+                                .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
+                                .map((cat) => (
+                                  <SelectItem key={cat.id} value={String(cat.id)}>
+                                    {cat.parentCategory} / {cat.name}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
-                        </TableCell>
-                        <TableCell className="py-1">
-                          <input
-                            type="text"
-                            value={editForm.description}
-                            onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                            placeholder="Description"
-                            className="flex h-7 w-full rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
                         </TableCell>
                         <TableCell className="py-1 text-right">
                           <input
@@ -743,13 +720,10 @@ export default function MonthlyBudgetPage() {
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={() => handleStartEdit(tx)}
                     >
-                      <TableCell className="text-sm">{tx.date}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">{isoToMonthLabel(tx.date.slice(0, 7))}</TableCell>
                       <TableCell className="text-sm">
                         <span className="text-muted-foreground text-xs">{tx.parentCategory} / </span>
                         {tx.categoryName}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {tx.description ?? "—"}
                       </TableCell>
                       <TableCell className="text-right text-sm font-medium">
                         {formatCurrency(tx.amount)}

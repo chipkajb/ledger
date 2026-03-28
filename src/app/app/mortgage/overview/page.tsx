@@ -145,93 +145,93 @@ export default function MortgageOverviewPage() {
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border-l-4 border-l-amber-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Current Balance
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.currentBalance)}</div>
+            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(summary.currentBalance)}</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Home Equity ($)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {formatCurrency(summary.currentEquity)}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Home Equity (%)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {formatPercent(summary.currentEquityPct)}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Monthly Payment (P&I)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.monthlyPayment)}</div>
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(summary.monthlyPayment)}</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Monthly Total (w/ Escrow)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summary.totalMonthlyPayment)}</div>
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(summary.totalMonthlyPayment)}</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-violet-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Payoff Date
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">
               {summary.payoffDate
                 ? format(new Date(summary.payoffDate + "T00:00:00"), "MMM yyyy")
                 : "—"}
             </div>
             {summary.monthsSaved > 0 && (
-              <div className="mt-1 text-xs text-green-600 dark:text-green-400">
+              <div className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                 {summary.monthsSaved} months early
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Interest Saved
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {formatCurrency(summary.moneySaved)}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">from extra payments</div>

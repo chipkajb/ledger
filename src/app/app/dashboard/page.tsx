@@ -4,8 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import {
   LineChart,
   Line,
-  BarChart,
-  Bar,
   AreaChart,
   Area,
   XAxis,
@@ -123,6 +121,18 @@ function buildMonthOptionsByYear(): Array<{ year: string; months: string[] }> {
   return result;
 }
 
+// Group color palette (Tailwind classes)
+const GROUP_BAR_COLORS = [
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-violet-500",
+  "bg-rose-500",
+  "bg-cyan-500",
+  "bg-orange-400",
+  "bg-indigo-400",
+];
+
 // ── Skeleton components ────────────────────────────────────────────────────
 
 function SkeletonCard() {
@@ -161,6 +171,7 @@ export default function DashboardPage() {
   const [loadingMortgage, setLoadingMortgage] = useState(true);
   const [loadingSnapshots, setLoadingSnapshots] = useState(true);
   const [trendWindow, setTrendWindow] = useState<"6m" | "1y" | "2y" | "5y" | "all">("all");
+  const [mortgageMonths, setMortgageMonths] = useState<number>(24);
 
   useEffect(() => {
     fetch("/api/net-worth/latest")
@@ -229,17 +240,30 @@ export default function DashboardPage() {
   const mortgageSummary = mortgageData?.summary ?? null;
   const equityPct = mortgageSummary?.equityPercent ?? null;
 
-  // Bar chart data: top 8 expense categories by actual spend
-  const categoryChartData = (budgetData?.categories ?? [])
-    .filter((c) => !c.isIncomeSource && c.actual > 0)
-    .sort((a, b) => b.actual - a.actual)
-    .slice(0, 8)
-    .map((c) => ({
-      name: c.name.length > 12 ? c.name.slice(0, 11) + "…" : c.name,
-      Actual: c.actual,
-    }));
+  // Grouped category data for Budget by Group & Category
+  const groupedCategoryData = useMemo(() => {
+    const cats = (budgetData?.categories ?? [])
+      .filter((c) => !c.isIncomeSource && c.actual > 0);
+    const groups: Record<string, typeof cats> = {};
+    for (const cat of cats) {
+      if (!groups[cat.parentCategory]) groups[cat.parentCategory] = [];
+      groups[cat.parentCategory].push(cat);
+    }
+    return Object.entries(groups)
+      .map(([group, items]) => ({
+        group,
+        total: items.reduce((s, c) => s + c.actual, 0),
+        items: items.slice().sort((a, b) => b.actual - a.actual),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [budgetData]);
 
-  // Mortgage area chart: first 24 months of schedule from snapshots proxy
+  const maxCategoryActual = useMemo(() => {
+    const allItems = groupedCategoryData.flatMap((g) => g.items);
+    return Math.max(...allItems.map((c) => c.actual), 1);
+  }, [groupedCategoryData]);
+
+  // Mortgage area chart
   const mortgageChartData: { month: string; Balance: number }[] = [];
   if (mortgageData?.active && mortgageSummary) {
     const rate = mortgageData.active.annualRate / 100 / 12;
@@ -247,7 +271,7 @@ export default function DashboardPage() {
     const P = mortgageData.active.loanAmount;
     const payment = rate > 0 ? (P * rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1) : P / n;
     let balance = mortgageSummary.currentBalance;
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < mortgageMonths; i++) {
       const interestPayment = balance * rate;
       const principalPayment = payment - interestPayment;
       balance = Math.max(0, balance - principalPayment);
@@ -282,6 +306,14 @@ export default function DashboardPage() {
     };
   }, [snapshots]);
 
+  // Mortgage time range labels
+  const mortgageRanges: { label: string; months: number }[] = [
+    { label: "1y", months: 12 },
+    { label: "2y", months: 24 },
+    { label: "5y", months: 60 },
+    { label: "10y", months: 120 },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -315,16 +347,16 @@ export default function DashboardPage() {
         {loadingNetWorth ? (
           <SkeletonCard />
         ) : (
-          <Card>
+          <Card className="border-l-4 border-l-blue-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Net Worth</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {formatCurrency(netWorthData?.current?.netWorth)}
               </div>
               {netWorthDelta != null && (
-                <div className={`mt-1 flex items-center gap-1 text-sm ${deltaPositive ? "text-green-600" : "text-red-600"}`}>
+                <div className={`mt-1 flex items-center gap-1 text-sm ${deltaPositive ? "text-emerald-600" : "text-red-500"}`}>
                   <span>{deltaPositive ? "▲" : "▼"}</span>
                   <span>{formatCurrency(Math.abs(netWorthDelta))} this week</span>
                 </div>
@@ -342,16 +374,16 @@ export default function DashboardPage() {
         {loadingBudget ? (
           <SkeletonCard />
         ) : (
-          <Card>
+          <Card className={`border-l-4 ${budgetData && budgetData.netGain >= 0 ? "border-l-emerald-500" : "border-l-red-500"}`}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Budget — {isoToMonthLabel(selectedMonth)}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                 {formatCurrency(budgetData?.totalIncome)}
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Expenses: {formatCurrency(budgetData?.totalExpenses)}
+                Expenses: <span className="text-red-500 font-medium">{formatCurrency(budgetData?.totalExpenses)}</span>
               </p>
               {budgetData && (
                 <Badge
@@ -369,17 +401,17 @@ export default function DashboardPage() {
         {loadingMortgage ? (
           <SkeletonCard />
         ) : (
-          <Card>
+          <Card className="border-l-4 border-l-amber-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Mortgage</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                 {mortgageSummary ? formatCurrency(mortgageSummary.currentBalance) : "—"}
               </div>
               {equityPct != null && (
                 <p className="text-sm text-muted-foreground mt-1">
-                  Equity: {formatPercent(equityPct)}
+                  Equity: <span className="text-emerald-600 font-medium">{formatPercent(equityPct)}</span>
                 </p>
               )}
               {mortgageSummary?.payoffDate && (
@@ -402,8 +434,8 @@ export default function DashboardPage() {
               <div>
                 <CardTitle className="text-sm font-medium">Net Worth Trend</CardTitle>
                 {trendSlopePerMonth != null && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {trendSlopePerMonth >= 0 ? "+" : "−"}${Math.abs(trendSlopePerMonth) >= 1000 ? `${(Math.abs(trendSlopePerMonth) / 1000).toFixed(1)}k` : Math.abs(trendSlopePerMonth)}/mo
+                  <p className={`text-xs mt-0.5 font-medium ${trendSlopePerMonth >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                    {trendSlopePerMonth >= 0 ? "+" : "−"}${Math.abs(trendSlopePerMonth) >= 1000 ? `${(Math.abs(trendSlopePerMonth) / 1000).toFixed(1)}k` : Math.abs(trendSlopePerMonth)}/mo avg
                   </p>
                 )}
               </div>
@@ -432,7 +464,7 @@ export default function DashboardPage() {
             ) : (
               <ResponsiveContainer width="100%" height={192}>
                 <LineChart data={snapshotChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 10 }}
@@ -458,7 +490,7 @@ export default function DashboardPage() {
                   <Line
                     type="monotone"
                     dataKey="Net Worth"
-                    stroke="hsl(var(--primary))"
+                    stroke="hsl(220 70% 50%)"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -477,46 +509,54 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Budget by Category */}
+        {/* Budget by Group & Category */}
         <Card className="col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Budget by Category</CardTitle>
+            <CardTitle className="text-sm font-medium">Budget by Group &amp; Category</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingBudget ? (
               <SkeletonChart />
-            ) : categoryChartData.length === 0 ? (
+            ) : groupedCategoryData.length === 0 ? (
               <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
                 No transactions this month
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={192}>
-                <BarChart data={categoryChartData} margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 9 }}
-                    angle={-35}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
-                    width={48}
-                  />
-                  <Tooltip
-                    formatter={(v: number) => formatCurrency(v)}
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--popover))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "6px",
-                      color: "hsl(var(--popover-foreground))",
-                    }}
-                  />
-                  <Bar dataKey="Actual" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="max-h-48 overflow-y-auto space-y-3 pr-1">
+                {groupedCategoryData.map(({ group, total, items }, gi) => {
+                  const barColor = GROUP_BAR_COLORS[gi % GROUP_BAR_COLORS.length];
+                  return (
+                    <div key={group}>
+                      {/* Group header */}
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {group}
+                        </span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {formatCurrency(total)}
+                        </span>
+                      </div>
+                      {/* Category rows */}
+                      <div className="space-y-1">
+                        {items.map((cat) => (
+                          <div key={cat.id}>
+                            <div className="flex items-center justify-between text-xs mb-0.5">
+                              <span className="truncate max-w-[60%]">{cat.name}</span>
+                              <span className="font-medium ml-2 shrink-0">{formatCurrency(cat.actual)}</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${barColor}`}
+                                style={{ width: `${(cat.actual / maxCategoryActual) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -524,7 +564,22 @@ export default function DashboardPage() {
         {/* Mortgage Balance Over Time */}
         <Card className="col-span-1">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Mortgage Balance (24 mo)</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Mortgage Balance</CardTitle>
+              <div className="flex gap-0.5">
+                {mortgageRanges.map((r) => (
+                  <Button
+                    key={r.months}
+                    variant={mortgageMonths === r.months ? "default" : "ghost"}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setMortgageMonths(r.months)}
+                  >
+                    {r.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingMortgage ? (
@@ -538,15 +593,15 @@ export default function DashboardPage() {
                 <AreaChart data={mortgageChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="mortgageGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="hsl(220 70% 50%)" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="hsl(220 70% 50%)" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis
                     dataKey="month"
                     tick={{ fontSize: 10 }}
-                    interval={5}
+                    interval={Math.max(Math.floor(mortgageChartData.length / 6) - 1, 0)}
                   />
                   <YAxis
                     tick={{ fontSize: 10 }}
@@ -565,7 +620,7 @@ export default function DashboardPage() {
                   <Area
                     type="monotone"
                     dataKey="Balance"
-                    stroke="hsl(var(--primary))"
+                    stroke="hsl(220 70% 50%)"
                     strokeWidth={2}
                     fill="url(#mortgageGradient)"
                   />
