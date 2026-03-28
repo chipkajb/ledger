@@ -137,7 +137,7 @@ function YtdCategoryTable({
               <TableCell className="py-1.5 text-right text-sm">{formatCurrency(group.total)}</TableCell>
               <TableCell className="py-1.5 text-right text-sm text-muted-foreground">{avg(group.total)}</TableCell>
             </TableRow>
-            {group.categories.map((cat) => (
+            {[...group.categories].sort((a, b) => Math.abs(b.total) - Math.abs(a.total)).map((cat) => (
               <TableRow key={`cat-${cat.categoryId}`}>
                 <TableCell className="py-1.5 pl-8 text-sm">{cat.name}</TableCell>
                 <TableCell className="py-1.5 text-right text-sm">

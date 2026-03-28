@@ -332,6 +332,10 @@ export default function MonthlyBudgetPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [hideEmpty, setHideEmpty] = useState(false);
 
+  const [editingTxId, setEditingTxId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ date: "", categoryId: "", amount: "", description: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   useEffect(() => {
     fetch("/api/budget/categories")
       .then((r) => r.json())
@@ -362,6 +366,50 @@ export default function MonthlyBudgetPage() {
   }
 
   useEffect(() => { loadData(); }, [selectedMonth]);
+
+  function handleStartEdit(tx: Transaction) {
+    setEditingTxId(tx.id);
+    setEditForm({
+      date: tx.date,
+      categoryId: String(tx.categoryId),
+      amount: String(tx.amount),
+      description: tx.description ?? "",
+    });
+  }
+
+  function handleCancelEdit() {
+    setEditingTxId(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingTxId) return;
+    const amountNum = parseFloat(editForm.amount);
+    if (isNaN(amountNum) || amountNum === 0) {
+      alert("Amount must be a non-zero number.");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const res = await fetch("/api/budget/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingTxId,
+          date: editForm.date,
+          categoryId: parseInt(editForm.categoryId),
+          amount: amountNum,
+          description: editForm.description.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setEditingTxId(null);
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   async function handleDeleteTx(id: number) {
     if (!confirm("Delete this transaction?")) return;
@@ -609,30 +657,115 @@ export default function MonthlyBudgetPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTx.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-sm">{tx.date}</TableCell>
-                    <TableCell className="text-sm">
-                      <span className="text-muted-foreground text-xs">{tx.parentCategory} / </span>
-                      {tx.categoryName}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {tx.description ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-medium">
-                      {formatCurrency(tx.amount)}
-                    </TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => handleDeleteTx(tx.id)}
-                        className="text-xs text-red-500 hover:text-red-700 px-1"
-                        title="Delete transaction"
-                      >
-                        ✕
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredTx.map((tx) => {
+                  const isEditing = editingTxId === tx.id;
+                  const editParentGroups = categories.reduce<Record<string, Category[]>>((acc, cat) => {
+                    const key = cat.parentCategory ?? "Other";
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(cat);
+                    return acc;
+                  }, {});
+
+                  if (isEditing) {
+                    return (
+                      <TableRow key={tx.id} className="bg-muted/30">
+                        <TableCell className="py-1">
+                          <input
+                            type="date"
+                            value={editForm.date}
+                            onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                            className="flex h-7 w-32 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </TableCell>
+                        <TableCell className="py-1">
+                          <Select value={editForm.categoryId} onValueChange={(v) => setEditForm((f) => ({ ...f, categoryId: v }))}>
+                            <SelectTrigger className="h-7 w-44 text-xs">
+                              <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(editParentGroups).map(([parent, cats]) => (
+                                <SelectGroup key={parent}>
+                                  <SelectLabel>{parent}</SelectLabel>
+                                  {cats.map((cat) => (
+                                    <SelectItem key={cat.id} value={String(cat.id)}>
+                                      {cat.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="py-1">
+                          <input
+                            type="text"
+                            value={editForm.description}
+                            onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                            placeholder="Description"
+                            className="flex h-7 w-full rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </TableCell>
+                        <TableCell className="py-1 text-right">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editForm.amount}
+                            onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                            className="flex h-7 w-24 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm text-right focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </TableCell>
+                        <TableCell className="py-1">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={handleSaveEdit}
+                              disabled={savingEdit}
+                              className="text-xs text-green-600 hover:text-green-800 px-1 font-medium"
+                              title="Save"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="text-xs text-muted-foreground hover:text-foreground px-1"
+                              title="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  return (
+                    <TableRow
+                      key={tx.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => handleStartEdit(tx)}
+                    >
+                      <TableCell className="text-sm">{tx.date}</TableCell>
+                      <TableCell className="text-sm">
+                        <span className="text-muted-foreground text-xs">{tx.parentCategory} / </span>
+                        {tx.categoryName}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {tx.description ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right text-sm font-medium">
+                        {formatCurrency(tx.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTx(tx.id); }}
+                          className="text-xs text-red-500 hover:text-red-700 px-1"
+                          title="Delete transaction"
+                        >
+                          ✕
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
