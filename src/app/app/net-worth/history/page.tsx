@@ -153,11 +153,12 @@ function NetWorthTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number }>;
+  payload?: Array<{ value: number; dataKey?: string }>;
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
-  const value = payload[0].value;
+  const entry = payload.find((p) => p.dataKey === "netWorth") ?? payload[0];
+  const value = entry.value;
   const color = value < 0 ? "#ef4444" : "#22c55e";
   return (
     <div className="rounded-lg p-2 text-sm shadow-md" style={TOOLTIP_CONTENT_STYLE}>
@@ -311,6 +312,31 @@ export default function NetWorthHistoryPage() {
 
   // Chart data: all snapshots in ascending (chronological) order
   const chartEnriched: EnrichedSnapshot[] = allSnapshots.map((s) => ({ ...s, date: s.snapshotDate }));
+
+  // Trend line + $/mo for Net Worth Over Time chart
+  const { trendChartData, trendSlopePerMonth } = useMemo(() => {
+    const base = chartEnriched;
+    if (base.length < 2) return { trendChartData: base, trendSlopePerMonth: null };
+    const n = base.length;
+    const ys = base.map((d) => d.netWorth);
+    const sumX = (n * (n - 1)) / 2;
+    const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+    const sumY = ys.reduce((s, y) => s + y, 0);
+    const sumXY = ys.reduce((s, y, i) => s + i * y, 0);
+    const denom = n * sumXX - sumX * sumX;
+    if (denom === 0) return { trendChartData: base, trendSlopePerMonth: null };
+    const slope = (n * sumXY - sumX * sumY) / denom;
+    const intercept = (sumY - slope * sumX) / n;
+    const firstMs = new Date(base[0].date + "T00:00:00").getTime();
+    const lastMs = new Date(base[n - 1].date + "T00:00:00").getTime();
+    const monthSpan = (lastMs - firstMs) / (1000 * 60 * 60 * 24 * 30.44);
+    const slopePerMonth = monthSpan > 0 ? Math.round((slope * (n - 1)) / monthSpan) : Math.round(slope);
+    return {
+      trendChartData: base.map((d, i) => ({ ...d, trend: Math.round(slope * i + intercept) })),
+      trendSlopePerMonth: slopePerMonth,
+    };
+  }, [chartEnriched]);
+
   const deltaData = chartEnriched
     .filter((s) => s.delta !== null && s.delta !== undefined)
     .map((s) => ({ date: s.date, delta: s.delta ?? 0 }));
@@ -438,17 +464,25 @@ export default function NetWorthHistoryPage() {
           {/* Charts */}
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Net Worth Over Time</CardTitle>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Net Worth Over Time</CardTitle>
+                  {trendSlopePerMonth != null && (
+                    <p className="text-xs text-muted-foreground">
+                      {trendSlopePerMonth >= 0 ? "+" : "−"}${Math.abs(trendSlopePerMonth) >= 1000 ? `${(Math.abs(trendSlopePerMonth) / 1000).toFixed(1)}k` : Math.abs(trendSlopePerMonth)}/mo
+                    </p>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={chartEnriched} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                  <LineChart data={trendChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => format(new Date(v + "T00:00:00"), "MMM yy")} />
                     <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickFormatter={formatCurrencyShort} width={64} />
                     <Tooltip content={<NetWorthTooltip />} />
                     <Line type="monotone" dataKey="netWorth" name="Net Worth" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="trend" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="4 3" dot={false} legendType="none" />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
