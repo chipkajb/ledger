@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, currentMonth, isoToMonthLabel } from "@/lib/utils";
+import type { MortgageSummary } from "@/lib/mortgage";
 import { Button } from "@/components/ui/button";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -76,6 +77,18 @@ interface MortgageData {
     totalPaid: number;
     payoffDate: string;
   } | null;
+}
+
+/** Shape of each row from GET /api/mortgage */
+interface MortgageApiRow {
+  id: number;
+  active: boolean;
+  loanAmount: number;
+  housePrice: number;
+  downPayment: number;
+  annualRate: number;
+  termYears: number;
+  summary: MortgageSummary;
 }
 
 interface NetWorthSnapshot {
@@ -182,7 +195,7 @@ export default function DashboardPage() {
 
     fetch("/api/mortgage")
       .then((r) => r.json())
-      .then((list: any[]) => {
+      .then((list: MortgageApiRow[]) => {
         if (!Array.isArray(list) || list.length === 0) {
           setMortgageData({ active: null, summary: null });
           return;

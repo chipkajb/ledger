@@ -137,6 +137,16 @@ db.exec(`
 
 console.log("✅ Tables created");
 
+// Skip heavy seeding on every container restart once the app has been initialized.
+const initRow = db
+  .prepare("SELECT value FROM app_settings WHERE key = ?")
+  .get("app_initialized") as { value: string } | undefined;
+if (initRow?.value === "true") {
+  console.log("⏭️  Database already initialized — skipping seed");
+  db.close();
+  process.exit(0);
+}
+
 // ─── Helper: Excel serial date to ISO date ─────────────────────────────────────
 function excelDateToISO(serial: number): string {
   const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899

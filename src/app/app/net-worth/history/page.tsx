@@ -8,7 +8,6 @@ import {
   Line,
   AreaChart,
   Area,
-  BarChart,
   Bar,
   Cell,
   XAxis,

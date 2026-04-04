@@ -20,7 +20,6 @@ import {
 import { ExportButton } from "@/components/ui/export-button";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, currentMonth, getWeekLabel, isoToMonthLabel } from "@/lib/utils";
-import { format } from "date-fns";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
