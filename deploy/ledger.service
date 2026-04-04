@@ -1,0 +1,30 @@
+[Unit]
+Description=Ledger Personal Finance App (Docker Compose)
+Documentation=https://github.com/chipkajb/ledger
+# Start after the Docker daemon and Tailscale are both ready.
+After=network-online.target docker.service tailscaled.service
+Wants=network-online.target
+Requires=docker.service tailscaled.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Populated by deploy/setup.sh
+WorkingDirectory=LEDGER_DIR_PLACEHOLDER
+
+# Bring the stack up using the pre-built image.
+ExecStart=/usr/bin/docker compose up -d --no-build
+# Gracefully stop on shutdown / reboot.
+ExecStop=/usr/bin/docker compose down
+
+# Give the build / first-run seed time to complete.
+TimeoutStartSec=300
+TimeoutStopSec=60
+
+# Restart if Docker daemon restarts.
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
