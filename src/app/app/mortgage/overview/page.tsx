@@ -330,14 +330,14 @@ export default function MortgageOverviewPage() {
             <CardTitle className="text-base">Remaining Payments: Principal vs Interest</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
                   innerRadius={70}
-                  outerRadius={110}
+                  outerRadius={100}
                   paddingAngle={3}
                   dataKey="value"
                   label={({ name, percent }) =>
