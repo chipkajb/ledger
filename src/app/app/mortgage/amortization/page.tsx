@@ -333,7 +333,7 @@ export default function AmortizationPage() {
                         isCurrentMonth
                           ? "bg-primary/10 border-l-4 border-l-primary font-medium"
                           : isPast
-                          ? "opacity-50"
+                          ? "opacity-60 text-muted-foreground"
                           : "hover:bg-muted/30",
                       ].join(" ")}
                     >
