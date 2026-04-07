@@ -23,6 +23,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface NavItem {
   label: string;
@@ -121,40 +129,60 @@ export function Sidebar() {
             <div key={item.label}>
               {item.children ? (
                 <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+                  {collapsed ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className={cn(
+                            "flex w-full items-center justify-center px-2 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                            isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground"
+                          )}
+                        >
+                          {item.icon}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="right" align="start" className="w-48">
+                        <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {item.children.map((child) => (
+                          <DropdownMenuItem key={child.href} asChild>
+                            <Link
+                              href={child.href}
+                              className={cn(
+                                "flex items-center gap-2 cursor-pointer",
+                                pathname === child.href && "font-medium"
+                              )}
+                            >
+                              {child.icon}
+                              <span>{child.label}</span>
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <>
                       <button
-                        onClick={() => !collapsed && toggleGroup(item.label)}
+                        onClick={() => toggleGroup(item.label)}
                         className={cn(
                           "flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground",
-                          collapsed && "justify-center px-2"
+                          isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground"
                         )}
                       >
                         {item.icon}
-                        {!collapsed && (
-                          <>
-                            <span className="flex-1 text-left">{item.label}</span>
-                            <ChevronRight
-                              className={cn(
-                                "h-3 w-3 transition-transform",
-                                expandedGroups.has(item.label) && "rotate-90"
-                              )}
-                            />
-                          </>
-                        )}
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <ChevronRight
+                          className={cn(
+                            "h-3 w-3 transition-transform",
+                            expandedGroups.has(item.label) && "rotate-90"
+                          )}
+                        />
                       </button>
-                    </TooltipTrigger>
-                    {collapsed && (
-                      <TooltipContent side="right">{item.label}</TooltipContent>
-                    )}
-                  </Tooltip>
-                  {!collapsed && expandedGroups.has(item.label) && (
-                    <div className="ml-4 border-l border-sidebar-border pl-2">
-                      {item.children.map((child) => (
-                        <Tooltip key={child.href}>
-                          <TooltipTrigger asChild>
+                      {expandedGroups.has(item.label) && (
+                        <div className="ml-4 border-l border-sidebar-border pl-2">
+                          {item.children.map((child) => (
                             <Link
+                              key={child.href}
                               href={child.href}
                               className={cn(
                                 "flex items-center gap-3 px-3 py-1.5 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md",
@@ -165,10 +193,10 @@ export function Sidebar() {
                               {child.icon}
                               <span>{child.label}</span>
                             </Link>
-                          </TooltipTrigger>
-                        </Tooltip>
-                      ))}
-                    </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               ) : (
