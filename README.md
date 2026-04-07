@@ -14,7 +14,7 @@ A personal finance tracking app for budgeting, mortgage management, and net wort
 - **Mortgage calculator** — full amortization schedule, refinance comparison, and extra-payment tracking showing how early payments shorten your loan
 - **Net worth tracker** — snapshot history with charts across checking, savings, home equity, retirement, investments, HSA, 529, and liabilities
 - **Single-user, self-hosted** — runs entirely on your machine or a personal server; your financial data never leaves your hands
-- **Import from Excel** — seed script ingests your existing `Budget 2026.xlsx`, `Mortgage.xlsx`, and `Net Worth.xlsx` spreadsheets automatically
+- **Import from Excel** — seed script ingests your existing `Budget YYYY.xlsx`, `Mortgage.xlsx`, and `Net Worth.xlsx` spreadsheets automatically
 - **Docker-ready** — one `docker-compose up` and you're running in production
 
 ---
@@ -92,7 +92,7 @@ The seed script creates all tables, loads data from your Excel files (if present
 pnpm seed
 ```
 
-If you have your Excel spreadsheets in the repo root (`Budget 2026.xlsx`, `Mortgage.xlsx`, `Net Worth.xlsx`), they will be imported automatically. The script is idempotent — it's safe to run multiple times.
+If you have your Excel spreadsheets in the repo root (`Budget YYYY.xlsx`, `Mortgage.xlsx`, `Net Worth.xlsx`), they will be imported automatically. The script is idempotent — it's safe to run multiple times.
 
 ### 5. Start the dev server
 
@@ -158,14 +158,25 @@ This will:
 3. Run the seed/migration script on first start
 4. Serve the app on port **3000**
 
-### 3. Map to a domain (optional)
+### 3. Production deployment with Tailscale (recommended)
 
-Point a reverse proxy (e.g. [Caddy](https://caddyserver.com) or nginx) to `localhost:3000` and configure HTTPS. Update `NEXTAUTH_URL` to your public URL.
+For a private, internet-accessible deployment, use the provided setup script. It detects your Tailscale IP, generates secrets, and installs a systemd service so Ledger starts on boot:
+
+```bash
+chmod +x deploy/setup.sh && sudo deploy/setup.sh
+```
+
+The container binds to your Tailscale IP (`100.x.x.x:3000`) so it is reachable only over your Tailscale network — no public internet exposure, no reverse proxy needed. Update `NEXTAUTH_URL` to your Tailscale address, e.g. `http://100.x.x.x:3000`.
 
 ### Updating
 
 ```bash
-docker-compose pull   # or rebuild if building locally
+sudo deploy/redeploy.sh
+```
+
+Or manually:
+
+```bash
 docker-compose up -d --build
 ```
 
@@ -173,7 +184,7 @@ The database volume persists across container rebuilds — your data is safe.
 
 ### Health check
 
-The container exposes `GET /api/health` (no auth required) which returns `{ "status": "ok" }`. Docker Compose polls this every 30 seconds.
+The container exposes `GET /api/health` (no auth required) which returns `{ "status": "ok", "timestamp": "<iso-date>" }`. Docker Compose polls this every 30 seconds.
 
 ---
 
@@ -185,24 +196,23 @@ src/
 │   ├── api/                  # API route handlers (Next.js Route Handlers)
 │   │   ├── auth/             # NextAuth endpoints
 │   │   ├── budget/           # Budget categories, transactions, targets, summary
+│   │   ├── export/           # CSV export for budget, transactions, mortgage, net worth
 │   │   ├── health/           # Health check
+│   │   ├── import/           # CSV import for all modules
 │   │   ├── mortgage/         # Mortgage CRUD + extra payments
 │   │   ├── net-worth/        # Snapshot history + latest
-│   │   └── settings/         # Password change
+│   │   └── settings/         # Password change, reset, net-worth labels
 │   ├── app/                  # Authenticated app pages (protected by middleware)
 │   │   ├── budget/           # Budget views: monthly, yearly, enter expenses
 │   │   ├── dashboard/        # Summary dashboard
+│   │   ├── data/             # Transaction and category management
 │   │   ├── mortgage/         # Amortization, overview, extra payments
 │   │   ├── net-worth/        # History chart, snapshot entry
 │   │   └── settings/         # Account settings
 │   └── login/                # Public login page
 ├── auth.ts                   # NextAuth configuration
 ├── components/
-│   ├── budget/               # Budget-specific React components
-│   ├── dashboard/            # Dashboard widgets
 │   ├── layout/               # Sidebar + topbar
-│   ├── mortgage/             # Mortgage charts and tables
-│   ├── net-worth/            # Net worth charts
 │   └── ui/                   # Radix UI + Tailwind base components
 └── lib/
     ├── db/
@@ -214,6 +224,12 @@ src/
 
 scripts/
 └── seed.ts                   # First-run seed script (tables + data import)
+
+deploy/
+├── setup.sh                  # One-time production setup (Tailscale + Docker + systemd)
+├── redeploy.sh               # Rebuild and restart the container
+├── docker-entrypoint.sh      # Container startup script
+└── ledger.service            # systemd service definition
 ```
 
 ---
@@ -252,7 +268,7 @@ If you have your finances tracked in Excel, place these files in the repo root b
 
 | File | What gets imported |
 |---|---|
-| `Budget 2026.xlsx` | Monthly transactions and category targets |
+| `Budget YYYY.xlsx` | Monthly transactions and category targets (any year — scanned automatically) |
 | `Mortgage.xlsx` | Mortgage terms and extra payment history |
 | `Net Worth.xlsx` | Monthly net worth snapshots (requires a `Data` sheet with a `Date` column) |
 
