@@ -116,6 +116,12 @@ export function runMigrations() {
     );
   `);
 
+  // Add deprecated column to budget_categories if it doesn't exist yet
+  const budgetCategoryColumns = sqlite.pragma("table_info(budget_categories)") as { name: string }[];
+  if (!budgetCategoryColumns.some((c) => c.name === "deprecated")) {
+    sqlite.exec(`ALTER TABLE budget_categories ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0`);
+  }
+
   sqlite.close();
   console.log("✅ Database migrations complete");
 }

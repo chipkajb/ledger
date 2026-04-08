@@ -109,6 +109,7 @@ interface Category {
   isIncomeSource: boolean;
   isFunds: boolean;
   sortOrder: number | null;
+  deprecated: boolean;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ function QuickAddTransaction({
           </SelectTrigger>
           <SelectContent>
             {categories
+              .filter((cat) => !cat.deprecated)
               .slice()
               .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
               .map((cat) => (
@@ -672,6 +674,7 @@ export default function MonthlyBudgetPage() {
                             </SelectTrigger>
                             <SelectContent>
                               {categories
+                                .filter((cat) => !cat.deprecated || String(cat.id) === editForm.categoryId)
                                 .slice()
                                 .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
                                 .map((cat) => (
