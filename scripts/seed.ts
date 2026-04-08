@@ -47,6 +47,7 @@ db.exec(`
     is_income_source INTEGER NOT NULL DEFAULT 0,
     is_funds INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
+    deprecated INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
