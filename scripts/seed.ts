@@ -137,6 +137,13 @@ db.exec(`
 
 console.log("✅ Tables created");
 
+// ─── Column migrations (additive, idempotent) ──────────────────────────────────
+const seedColumns = db.pragma("table_info(budget_categories)") as { name: string }[];
+if (!seedColumns.some((c) => c.name === "deprecated")) {
+  db.exec(`ALTER TABLE budget_categories ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0`);
+  console.log("✅ Added deprecated column to budget_categories");
+}
+
 // Skip heavy seeding on every container restart once the app has been initialized.
 const initRow = db
   .prepare("SELECT value FROM app_settings WHERE key = ?")

@@ -133,6 +133,13 @@ db.exec(`
 
 console.log("✅ Database migrations complete");
 
+// ─── Column migrations (additive, idempotent) ──────────────────────────────────
+const budgetCatColumns = db.pragma("table_info(budget_categories)");
+if (!budgetCatColumns.some((c) => c.name === "deprecated")) {
+  db.exec(`ALTER TABLE budget_categories ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0`);
+  console.log("✅ Added deprecated column to budget_categories");
+}
+
 // ─── Bootstrap admin credentials ───────────────────────────────────────────────
 
 const adminEmail = process.env.ADMIN_EMAIL;
