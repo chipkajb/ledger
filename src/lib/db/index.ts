@@ -16,6 +16,14 @@ export function getDb() {
     // Enable WAL mode for better concurrent read performance
     sqlite.pragma("journal_mode = WAL");
     sqlite.pragma("foreign_keys = ON");
+
+    // Run additive column migrations before Drizzle touches the schema.
+    // This guarantees new columns exist even if the startup seed script didn't run.
+    const budgetCatCols = sqlite.pragma("table_info(budget_categories)") as Array<{ name: string }>;
+    if (budgetCatCols.length > 0 && !budgetCatCols.some((c) => c.name === "deprecated")) {
+      sqlite.exec("ALTER TABLE budget_categories ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0");
+    }
+
     _db = drizzle(sqlite, { schema });
   }
   return _db;
