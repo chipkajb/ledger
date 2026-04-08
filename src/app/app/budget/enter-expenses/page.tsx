@@ -30,6 +30,7 @@ interface Category {
   isIncomeSource: boolean;
   isFunds: boolean;
   sortOrder: number | null;
+  deprecated: boolean;
 }
 
 interface Transaction {
@@ -114,12 +115,14 @@ export default function EnterExpensesPage() {
   }, [selectedMonth]);
 
   const parentGroups = useMemo(() =>
-    categories.reduce<Record<string, Category[]>>((acc, cat) => {
-      const key = cat.parentCategory ?? "Other";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(cat);
-      return acc;
-    }, {}), [categories]);
+    categories
+      .filter((cat) => !cat.deprecated)
+      .reduce<Record<string, Category[]>>((acc, cat) => {
+        const key = cat.parentCategory ?? "Other";
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(cat);
+        return acc;
+      }, {}), [categories]);
 
   const groupKeys = useMemo(() => Object.keys(parentGroups).sort(), [parentGroups]);
 
@@ -515,6 +518,7 @@ export default function EnterExpensesPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {categories
+                              .filter((cat) => !cat.deprecated || String(cat.id) === editForm.categoryId)
                               .slice()
                               .sort((a, b) => a.parentCategory.localeCompare(b.parentCategory) || a.name.localeCompare(b.name))
                               .map((cat) => (

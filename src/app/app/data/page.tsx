@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { ImportDialog } from "@/components/ui/import-dialog";
 import { formatCurrency, isoToMonthLabel, currentMonth } from "@/lib/utils";
-import { Pencil, Trash2, Plus, Check, X } from "lucide-react";
+import { Pencil, Trash2, Plus, Check, X, Archive, ArchiveRestore } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,7 @@ interface Category {
   parentCategory: string;
   isIncomeSource: boolean;
   sortOrder: number;
+  deprecated: boolean;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -448,6 +449,8 @@ function CategoriesTab({
 
   const [deleteGroupError, setDeleteGroupError] = useState<string | null>(null);
 
+  const [showDeprecated, setShowDeprecated] = useState(true);
+
   const grouped = useMemo(() =>
     categories.reduce<Record<string, Category[]>>((acc, c) => {
       if (!acc[c.parentCategory]) acc[c.parentCategory] = [];
@@ -455,12 +458,22 @@ function CategoriesTab({
       return acc;
     }, {}), [categories]);
 
+  const visibleGrouped = useMemo(() => {
+    if (showDeprecated) return grouped;
+    const filtered: Record<string, Category[]> = {};
+    for (const [group, cats] of Object.entries(grouped)) {
+      const active = cats.filter((c) => !c.deprecated);
+      if (active.length > 0) filtered[group] = active;
+    }
+    return filtered;
+  }, [grouped, showDeprecated]);
+
   const groupKeys = useMemo(() =>
-    Object.keys(grouped).sort((a, b) => {
-      const minA = Math.min(...grouped[a].map((c) => c.sortOrder));
-      const minB = Math.min(...grouped[b].map((c) => c.sortOrder));
+    Object.keys(visibleGrouped).sort((a, b) => {
+      const minA = Math.min(...visibleGrouped[a].map((c) => c.sortOrder));
+      const minB = Math.min(...visibleGrouped[b].map((c) => c.sortOrder));
       return minA - minB;
-    }), [grouped]);
+    }), [visibleGrouped]);
 
   const existingGroups = useMemo(() => Object.keys(grouped).sort(), [grouped]);
 
@@ -516,6 +529,20 @@ function CategoriesTab({
       onRefresh();
     } catch {
       setDeleteError("Delete failed");
+    }
+  }
+
+  async function toggleDeprecate(id: number, currentlyDeprecated: boolean) {
+    try {
+      const res = await fetch("/api/budget/categories", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, deprecated: !currentlyDeprecated }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      onRefresh();
+    } catch {
+      setDeleteError(currentlyDeprecated ? "Failed to restore category" : "Failed to deprecate category");
     }
   }
 
@@ -615,7 +642,24 @@ function CategoriesTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{categories.length} categories across {groupKeys.length} groups</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            {categories.filter((c) => !c.deprecated).length} active categories across {Object.keys(grouped).length} groups
+            {categories.some((c) => c.deprecated) && (
+              <span className="ml-1 text-muted-foreground/60">
+                ({categories.filter((c) => c.deprecated).length} deprecated)
+              </span>
+            )}
+          </p>
+          {categories.some((c) => c.deprecated) && (
+            <button
+              onClick={() => setShowDeprecated((v) => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+            >
+              {showDeprecated ? "Hide deprecated" : "Show deprecated"}
+            </button>
+          )}
+        </div>
         <div className="flex gap-2">
           <ImportDialog
             apiUrl="/api/import/categories"
@@ -662,11 +706,11 @@ function CategoriesTab({
                     <th className="px-3 py-2 text-left font-medium">Name</th>
                     <th className="px-3 py-2 text-left font-medium">Group</th>
                     <th className="px-3 py-2 text-center font-medium">Type</th>
-                    <th className="px-3 py-2 text-center font-medium w-20">Actions</th>
+                    <th className="px-3 py-2 text-center font-medium w-24">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {grouped[group].map((cat) =>
+                  {visibleGrouped[group].map((cat) =>
                     editId === cat.id ? (
                       <tr key={cat.id} className="border-t bg-blue-50 dark:bg-blue-950/20">
                         <td className="px-2 py-1">
@@ -706,8 +750,13 @@ function CategoriesTab({
                         </td>
                       </tr>
                     ) : (
-                      <tr key={cat.id} className="border-t hover:bg-muted/30">
-                        <td className="px-3 py-2 font-medium">{cat.name}</td>
+                      <tr key={cat.id} className={`border-t hover:bg-muted/30 ${cat.deprecated ? "opacity-50" : ""}`}>
+                        <td className="px-3 py-2 font-medium">
+                          <span className={cat.deprecated ? "line-through text-muted-foreground" : ""}>{cat.name}</span>
+                          {cat.deprecated && (
+                            <span className="ml-2 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">deprecated</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground">{cat.parentCategory}</td>
                         <td className="px-3 py-2 text-center text-xs text-muted-foreground">
                           {cat.isIncomeSource ? "Income" : "Expense"}
@@ -716,6 +765,13 @@ function CategoriesTab({
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => startEdit(cat)} className="p-1 hover:text-blue-600 transition-colors" title="Edit">
                               <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => toggleDeprecate(cat.id, cat.deprecated)}
+                              className={`p-1 transition-colors ${cat.deprecated ? "text-amber-600 hover:text-amber-800" : "hover:text-amber-600"}`}
+                              title={cat.deprecated ? "Restore category" : "Deprecate category"}
+                            >
+                              {cat.deprecated ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
                             </button>
                             <button onClick={() => deleteCategory(cat.id, cat.name)} className="p-1 hover:text-red-600 transition-colors" title="Delete">
                               <Trash2 className="h-3.5 w-3.5" />

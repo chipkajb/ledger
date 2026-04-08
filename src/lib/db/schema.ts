@@ -20,6 +20,7 @@ export const budgetCategories = sqliteTable("budget_categories", {
     .default(false),
   isFunds: integer("is_funds", { mode: "boolean" }).notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
+  deprecated: integer("deprecated", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),
