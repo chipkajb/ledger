@@ -1,0 +1,10 @@
+[Unit]
+Description=Ledger SQLite database backup
+After=ledger.service
+
+[Service]
+Type=oneshot
+ExecStart=LEDGER_DIR_PLACEHOLDER/deploy/backup.sh
+# Capture output to journald — view with: journalctl -u ledger-backup.service
+StandardOutput=journal
+StandardError=journal

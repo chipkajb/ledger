@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Ledger database backup daily at 02:00
+Requires=ledger.service
+
+[Timer]
+# Fire every day at 02:00 local time.
+OnCalendar=*-*-* 02:00:00
+# If the system was off at 02:00, run as soon as it comes back up.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -135,6 +135,29 @@ echo ""
 info "Starting Ledger…"
 systemctl start "$SERVICE_NAME"
 
+# ── Install backup timer ──────────────────────────────────────────────────────
+
+if ! command -v sqlite3 &>/dev/null; then
+  info "sqlite3 not found — installing…"
+  apt-get install -y sqlite3 >/dev/null
+  success "sqlite3 installed."
+fi
+
+BACKUP_SERVICE_DEST="/etc/systemd/system/ledger-backup.service"
+BACKUP_TIMER_DEST="/etc/systemd/system/ledger-backup.timer"
+
+sed "s|LEDGER_DIR_PLACEHOLDER|${PROJECT_DIR}|g" "$SCRIPT_DIR/ledger-backup.service" > "$BACKUP_SERVICE_DEST"
+chmod 644 "$BACKUP_SERVICE_DEST"
+cp "$SCRIPT_DIR/ledger-backup.timer" "$BACKUP_TIMER_DEST"
+chmod 644 "$BACKUP_TIMER_DEST"
+
+systemctl daemon-reload
+systemctl enable --now ledger-backup.timer
+
+success "Backup timer installed — daily at 02:00, backups in /var/backups/ledger (7-day rotation)."
+success "To run a backup now: sudo systemctl start ledger-backup.service"
+success "To view backup logs: journalctl -u ledger-backup.service"
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 echo ""
