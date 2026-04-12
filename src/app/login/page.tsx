@@ -40,8 +40,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4">
-            <Image src="/logo.png" alt="Ledger" width={80} height={80} className="mx-auto" />
+          <div className="mx-auto mb-4 flex justify-center">
+            <div className="rounded-2xl bg-[#09090b] p-3 shadow-sm ring-1 ring-border">
+              <Image src="/logo.png" alt="Ledger" width={80} height={80} className="h-20 w-20" priority />
+            </div>
           </div>
           <CardDescription>Sign in to your personal finance tracker</CardDescription>
         </CardHeader>
