@@ -198,7 +198,25 @@ export default function NetWorthSnapshotPage() {
               personalLoans: snap.personalLoans?.toString() ?? "",
             });
 
-            if (savedCalc) {
+            // Prefer DB-persisted sub-fields, fall back to localStorage, then defaults
+            const dbAccounts401k = snap.accounts401kJson ? JSON.parse(snap.accounts401kJson) : null;
+            const dbInvestAccounts = snap.investAccountsJson ? JSON.parse(snap.investAccountsJson) : null;
+            const dbPools = snap.teamworksPoolsJson ? JSON.parse(snap.teamworksPoolsJson) : null;
+            const hasDbSubFields = dbAccounts401k || dbInvestAccounts || dbPools;
+
+            if (hasDbSubFields) {
+              const storedEquity = snap.homeEquity ?? 0;
+              const storedMortgage = snap.mortgageBalance ?? 0;
+              setCalc({
+                homeValue: snap.homeValue != null
+                  ? String(snap.homeValue)
+                  : (storedEquity + storedMortgage) > 0 ? String(storedEquity + storedMortgage) : "",
+                accounts401k: dbAccounts401k ?? defaultCalcState.accounts401k,
+                investAccounts: dbInvestAccounts ?? defaultCalcState.investAccounts,
+                teamworksFMV: snap.teamworksFMV != null ? String(snap.teamworksFMV) : "",
+                teamworksPools: dbPools ?? defaultCalcState.teamworksPools,
+              });
+            } else if (savedCalc) {
               setCalc(savedCalc);
             } else {
               // First-time: reverse-calculate home value and seed single accounts
@@ -348,6 +366,12 @@ export default function NetWorthSnapshotPage() {
         mortgageBalance: parseNum(form.mortgageBalance),
         studentLoans: parseNum(form.studentLoans),
         personalLoans: parseNum(form.personalLoans),
+        // Sub-field breakdowns for pre-filling on next snapshot
+        homeValue: parseNum(calc.homeValue) || null,
+        accounts401kJson: JSON.stringify(calc.accounts401k),
+        investAccountsJson: JSON.stringify(calc.investAccounts),
+        teamworksPoolsJson: JSON.stringify(calc.teamworksPools),
+        teamworksFMV: parseNum(calc.teamworksFMV) || null,
       };
       const res = await fetch("/api/net-worth/snapshots", {
         method: "POST",

@@ -102,6 +102,12 @@ export const netWorthSnapshots = sqliteTable(
     investments: real("investments").notNull().default(0),
     plan529: real("plan_529").notNull().default(0),
     teamworksEquity: real("teamworks_equity").notNull().default(0),
+    // Sub-field breakdowns (JSON arrays / values for pre-filling the form)
+    homeValue: real("home_value"),
+    accounts401kJson: text("accounts_401k_json"),
+    investAccountsJson: text("invest_accounts_json"),
+    teamworksPoolsJson: text("teamworks_pools_json"),
+    teamworksFMV: real("teamworks_fmv"),
     // Liabilities
     mortgageBalance: real("mortgage_balance").notNull().default(0),
     studentLoans: real("student_loans").notNull().default(0),
