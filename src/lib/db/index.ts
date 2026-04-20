@@ -24,6 +24,21 @@ export function getDb() {
       sqlite.exec("ALTER TABLE budget_categories ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0");
     }
 
+    const nwCols = sqlite.pragma("table_info(net_worth_snapshots)") as Array<{ name: string }>;
+    if (nwCols.length > 0) {
+      const nwColNames = nwCols.map((c) => c.name);
+      if (!nwColNames.includes("home_value"))
+        sqlite.exec("ALTER TABLE net_worth_snapshots ADD COLUMN home_value REAL");
+      if (!nwColNames.includes("accounts_401k_json"))
+        sqlite.exec("ALTER TABLE net_worth_snapshots ADD COLUMN accounts_401k_json TEXT");
+      if (!nwColNames.includes("invest_accounts_json"))
+        sqlite.exec("ALTER TABLE net_worth_snapshots ADD COLUMN invest_accounts_json TEXT");
+      if (!nwColNames.includes("teamworks_pools_json"))
+        sqlite.exec("ALTER TABLE net_worth_snapshots ADD COLUMN teamworks_pools_json TEXT");
+      if (!nwColNames.includes("teamworks_fmv"))
+        sqlite.exec("ALTER TABLE net_worth_snapshots ADD COLUMN teamworks_fmv REAL");
+    }
+
     _db = drizzle(sqlite, { schema });
   }
   return _db;
