@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { mortgages, mortgageExtraPayments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { generateSchedule } from "@/lib/mortgage";
+import { buildScheduleWithBalanceAnchor } from "@/lib/mortgage";
+import { getLatestMortgageBalanceAnchor } from "@/lib/mortgage-balance-anchor";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,11 @@ export async function GET(
     .from(mortgageExtraPayments)
     .where(eq(mortgageExtraPayments.mortgageId, mortgage.id));
 
-  const { rows, summary } = generateSchedule(
+  const balanceAnchor = mortgage.isActive
+    ? await getLatestMortgageBalanceAnchor()
+    : null;
+
+  const { rows, summary } = buildScheduleWithBalanceAnchor(
     {
       loanAmount: mortgage.loanAmount,
       annualRate: mortgage.annualRate,
@@ -40,7 +45,8 @@ export async function GET(
       housePrice: mortgage.housePrice,
       downPayment: mortgage.downPayment,
     },
-    extras.map((e) => ({ paymentDate: e.paymentDate, amount: e.amount }))
+    extras.map((e) => ({ paymentDate: e.paymentDate, amount: e.amount })),
+    balanceAnchor
   );
 
   return NextResponse.json({ mortgage, extras, schedule: rows, summary });

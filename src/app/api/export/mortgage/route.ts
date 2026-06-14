@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { mortgages, mortgageExtraPayments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { generateSchedule } from "@/lib/mortgage";
+import { buildScheduleWithBalanceAnchor } from "@/lib/mortgage";
+import { getLatestMortgageBalanceAnchor } from "@/lib/mortgage-balance-anchor";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";
@@ -35,7 +36,17 @@ export async function GET(req: NextRequest) {
   const extraPayments = scheduleType === "original" ? [] :
     db.select().from(mortgageExtraPayments).where(eq(mortgageExtraPayments.mortgageId, mortgage.id)).all();
 
-  const { rows } = generateSchedule(
+  const mappedExtras = extraPayments.map((ep) => ({
+    paymentDate: ep.paymentDate,
+    amount: ep.amount,
+  }));
+
+  const balanceAnchor =
+    scheduleType === "original" || !mortgage.isActive
+      ? null
+      : await getLatestMortgageBalanceAnchor();
+
+  const { rows } = buildScheduleWithBalanceAnchor(
     {
       loanAmount: mortgage.loanAmount,
       annualRate: mortgage.annualRate,
@@ -47,7 +58,8 @@ export async function GET(req: NextRequest) {
       housePrice: mortgage.housePrice,
       downPayment: mortgage.downPayment,
     },
-    extraPayments.map((ep) => ({ paymentDate: ep.paymentDate, amount: ep.amount }))
+    mappedExtras,
+    balanceAnchor
   );
 
   const data = rows.map((r) => ({

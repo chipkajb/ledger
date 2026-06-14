@@ -49,6 +49,11 @@ export interface MortgageSummary {
   currentEquityPct: number;
 }
 
+export interface BalanceAnchor {
+  date: string; // YYYY-MM-DD
+  balance: number;
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -169,6 +174,54 @@ export function generateSchedule(
       currentEquityPct,
     },
   };
+}
+
+/**
+ * Reconcile the amortization schedule with a lender-reported balance from a net worth snapshot.
+ * Any gap vs the scheduled balance is modeled as an implied extra payment on the anchor payment date,
+ * which keeps P&I splits and payoff projections aligned with the actual remaining balance.
+ */
+export function buildScheduleWithBalanceAnchor(
+  params: MortgageParams,
+  extraPayments: ExtraPayment[] = [],
+  anchor: BalanceAnchor | null = null
+): { rows: AmortizationRow[]; summary: MortgageSummary } {
+  const base = generateSchedule(params, extraPayments);
+  if (!anchor || anchor.balance <= 0) return base;
+
+  const anchorRows = base.rows.filter((row) => row.date <= anchor.date);
+  if (anchorRows.length === 0) {
+    const impliedExtra = round2(params.loanAmount - anchor.balance);
+    if (impliedExtra < 0.01) return base;
+
+    return generateSchedule(params, [
+      ...extraPayments,
+      { paymentDate: params.firstPaymentDate, amount: impliedExtra },
+    ]);
+  }
+
+  const anchorRow = anchorRows.at(-1)!;
+  const impliedExtra = round2(anchorRow.endingBalance - anchor.balance);
+  if (impliedExtra < 0.01) return base;
+
+  const adjustedExtras = extraPayments.map((extra) => ({ ...extra }));
+  const existingIndex = adjustedExtras.findIndex(
+    (extra) => extra.paymentDate === anchorRow.date
+  );
+
+  if (existingIndex >= 0) {
+    adjustedExtras[existingIndex] = {
+      ...adjustedExtras[existingIndex],
+      amount: round2(adjustedExtras[existingIndex].amount + impliedExtra),
+    };
+  } else {
+    adjustedExtras.push({
+      paymentDate: anchorRow.date,
+      amount: impliedExtra,
+    });
+  }
+
+  return generateSchedule(params, adjustedExtras);
 }
 
 function calcTotalInterest(
