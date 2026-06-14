@@ -24,6 +24,10 @@ info "Rebuilding Docker image…"
 docker compose -f "$PROJECT_DIR/docker-compose.yml" --env-file "$ENV_FILE" build
 
 info "Restarting service…"
-systemctl restart ledger
+docker compose -f "$PROJECT_DIR/docker-compose.yml" --env-file "$ENV_FILE" down --remove-orphans || true
+# Remove container if it was started outside compose (blocks compose up).
+docker rm -f ledger 2>/dev/null || true
+docker compose -f "$PROJECT_DIR/docker-compose.yml" --env-file "$ENV_FILE" up -d --no-build --force-recreate
+systemctl reset-failed ledger 2>/dev/null || true
 
 success "Ledger redeployed successfully."
