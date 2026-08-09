@@ -166,6 +166,25 @@ export const mortgageExtraPayments = sqliteTable(
   })
 );
 
+export const mortgageEscrowChanges = sqliteTable(
+  "mortgage_escrow_changes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    mortgageId: integer("mortgage_id")
+      .notNull()
+      .references(() => mortgages.id, { onDelete: "cascade" }),
+    effectiveDate: text("effective_date").notNull(), // YYYY-MM-DD
+    amount: real("amount").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => ({
+    mortgageIdx: index("mortgage_escrow_changes_mortgage_idx").on(t.mortgageId),
+    dateIdx: index("mortgage_escrow_changes_date_idx").on(t.effectiveDate),
+  })
+);
+
 // ─── App Settings ─────────────────────────────────────────────────────────────
 
 export const appSettings = sqliteTable("app_settings", {
@@ -191,3 +210,6 @@ export type NewMortgage = typeof mortgages.$inferInsert;
 export type MortgageExtraPayment = typeof mortgageExtraPayments.$inferSelect;
 export type NewMortgageExtraPayment =
   typeof mortgageExtraPayments.$inferInsert;
+export type MortgageEscrowChange = typeof mortgageEscrowChanges.$inferSelect;
+export type NewMortgageEscrowChange =
+  typeof mortgageEscrowChanges.$inferInsert;

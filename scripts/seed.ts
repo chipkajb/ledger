@@ -129,6 +129,14 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS mortgage_escrow_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mortgage_id INTEGER NOT NULL REFERENCES mortgages(id) ON DELETE CASCADE,
+    effective_date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,

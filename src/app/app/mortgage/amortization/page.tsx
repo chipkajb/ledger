@@ -166,7 +166,6 @@ export default function AmortizationPage() {
   useEffect(() => { loadData(); }, []);
 
   const currentSchedule = selectedId ? (schedules.get(selectedId) ?? []) : [];
-  const currentMortgage = allMortgages.find((m) => m.id === selectedId);
 
   const filteredRows = useMemo(() => {
     let rows = currentSchedule;
@@ -197,14 +196,13 @@ export default function AmortizationPage() {
     setPage(1);
   }
 
-  async function saveEscrow(newEscrow: number) {
-    if (!selectedId || !currentMortgage) return;
-    await fetch(`/api/mortgage/${selectedId}`, {
-      method: "PATCH",
+  async function saveEscrow(dateStr: string, newEscrow: number) {
+    if (!selectedId) return;
+    await fetch(`/api/mortgage/${selectedId}/escrow-change`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ monthlyEscrow: newEscrow }),
+      body: JSON.stringify({ effectiveDate: dateStr, amount: newEscrow }),
     });
-    // Reload schedule
     await loadData();
   }
 
@@ -347,7 +345,7 @@ export default function AmortizationPage() {
                       <td className="whitespace-nowrap px-3 py-2">
                         <EditableCell
                           value={row.escrow}
-                          onSave={saveEscrow}
+                          onSave={(val) => saveEscrow(row.date, val)}
                           format={formatCurrency}
                         />
                       </td>

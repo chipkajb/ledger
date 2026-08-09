@@ -17,6 +17,11 @@ export interface ExtraPayment {
   amount: number;
 }
 
+export interface EscrowChange {
+  effectiveDate: string; // YYYY-MM-DD
+  amount: number;
+}
+
 export interface AmortizationRow {
   paymentNumber: number;
   date: string; // YYYY-MM-DD
@@ -58,6 +63,22 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function resolveEscrow(
+  dateStr: string,
+  baseEscrow: number,
+  escrowChanges: EscrowChange[]
+): number {
+  let escrow = baseEscrow;
+  for (const change of escrowChanges) {
+    if (change.effectiveDate <= dateStr) {
+      escrow = change.amount;
+    } else {
+      break;
+    }
+  }
+  return escrow;
+}
+
 export function calcMonthlyPayment(
   loanAmount: number,
   annualRate: number,
@@ -73,7 +94,8 @@ export function calcMonthlyPayment(
 
 export function generateSchedule(
   params: MortgageParams,
-  extraPayments: ExtraPayment[] = []
+  extraPayments: ExtraPayment[] = [],
+  escrowChanges: EscrowChange[] = []
 ): { rows: AmortizationRow[]; summary: MortgageSummary } {
   const { loanAmount, annualRate, termYears, paymentsPerYear, firstPaymentDate, monthlyEscrow, pmi, housePrice } = params;
 
@@ -87,6 +109,10 @@ export function generateSchedule(
     const existing = extraMap.get(ep.paymentDate) ?? 0;
     extraMap.set(ep.paymentDate, existing + ep.amount);
   }
+
+  const sortedEscrowChanges = [...escrowChanges].sort((a, b) =>
+    a.effectiveDate.localeCompare(b.effectiveDate)
+  );
 
   // Calculate baseline total interest (no extras) for money-saved calculation
   const baselineInterest = calcTotalInterest(loanAmount, annualRate, termYears, paymentsPerYear);
@@ -108,12 +134,13 @@ export function generateSchedule(
 
     const extra = round2(extraMap.get(dateStr) ?? 0);
     const actualPmi = balance > housePrice * 0.8 ? pmi : 0;
+    const escrow = resolveEscrow(dateStr, monthlyEscrow, sortedEscrowChanges);
 
     let endingBalance = round2(balance - principal - extra);
     if (endingBalance < 0) endingBalance = 0;
 
     const actualPayment = round2(interest + principal);
-    const totalPayment = round2(actualPayment + monthlyEscrow + actualPmi + extra);
+    const totalPayment = round2(actualPayment + escrow + actualPmi + extra);
 
     rows.push({
       paymentNumber,
@@ -122,7 +149,7 @@ export function generateSchedule(
       principal,
       interest,
       pmi: actualPmi,
-      escrow: monthlyEscrow,
+      escrow,
       extraPayment: extra,
       totalPayment,
       endingBalance,
@@ -154,12 +181,13 @@ export function generateSchedule(
   const currentBalance = currentRow?.endingBalance ?? loanAmount;
   const currentEquity = round2(housePrice - currentBalance);
   const currentEquityPct = round2((currentEquity / housePrice) * 100);
+  const currentEscrow = resolveEscrow(todayStr, monthlyEscrow, sortedEscrowChanges);
 
   return {
     rows,
     summary: {
       monthlyPayment,
-      totalMonthlyPayment: round2(monthlyPayment + monthlyEscrow),
+      totalMonthlyPayment: round2(monthlyPayment + currentEscrow),
       totalPayments: round2(rows.reduce((s, r) => s + r.totalPayment, 0)),
       totalInterest,
       totalPmi: totalPmiSum,
@@ -184,9 +212,10 @@ export function generateSchedule(
 export function buildScheduleWithBalanceAnchor(
   params: MortgageParams,
   extraPayments: ExtraPayment[] = [],
-  anchor: BalanceAnchor | null = null
+  anchor: BalanceAnchor | null = null,
+  escrowChanges: EscrowChange[] = []
 ): { rows: AmortizationRow[]; summary: MortgageSummary } {
-  const base = generateSchedule(params, extraPayments);
+  const base = generateSchedule(params, extraPayments, escrowChanges);
   if (!anchor || anchor.balance <= 0) return base;
 
   const anchorRows = base.rows.filter((row) => row.date <= anchor.date);
@@ -197,7 +226,7 @@ export function buildScheduleWithBalanceAnchor(
     return generateSchedule(params, [
       ...extraPayments,
       { paymentDate: params.firstPaymentDate, amount: impliedExtra },
-    ]);
+    ], escrowChanges);
   }
 
   const anchorRow = anchorRows.at(-1)!;
@@ -221,7 +250,7 @@ export function buildScheduleWithBalanceAnchor(
     });
   }
 
-  return generateSchedule(params, adjustedExtras);
+  return generateSchedule(params, adjustedExtras, escrowChanges);
 }
 
 function calcTotalInterest(

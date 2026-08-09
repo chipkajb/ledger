@@ -125,6 +125,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS mortgage_extra_payments_mortgage_idx ON mortgage_extra_payments(mortgage_id);
   CREATE INDEX IF NOT EXISTS mortgage_extra_payments_date_idx ON mortgage_extra_payments(payment_date);
 
+  CREATE TABLE IF NOT EXISTS mortgage_escrow_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mortgage_id INTEGER NOT NULL REFERENCES mortgages(id) ON DELETE CASCADE,
+    effective_date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS mortgage_escrow_changes_mortgage_idx ON mortgage_escrow_changes(mortgage_id);
+  CREATE INDEX IF NOT EXISTS mortgage_escrow_changes_date_idx ON mortgage_escrow_changes(effective_date);
+
   CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { mortgages, mortgageExtraPayments } from "@/lib/db/schema";
+import { mortgages, mortgageExtraPayments, mortgageEscrowChanges } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { buildScheduleWithBalanceAnchor } from "@/lib/mortgage";
 import { getLatestMortgageBalanceAnchor } from "@/lib/mortgage-balance-anchor";
@@ -36,9 +36,17 @@ export async function GET(req: NextRequest) {
   const extraPayments = scheduleType === "original" ? [] :
     db.select().from(mortgageExtraPayments).where(eq(mortgageExtraPayments.mortgageId, mortgage.id)).all();
 
+  const escrowChanges = scheduleType === "original" ? [] :
+    db.select().from(mortgageEscrowChanges).where(eq(mortgageEscrowChanges.mortgageId, mortgage.id)).all();
+
   const mappedExtras = extraPayments.map((ep) => ({
     paymentDate: ep.paymentDate,
     amount: ep.amount,
+  }));
+
+  const mappedEscrowChanges = escrowChanges.map((c) => ({
+    effectiveDate: c.effectiveDate,
+    amount: c.amount,
   }));
 
   const balanceAnchor =
@@ -59,7 +67,8 @@ export async function GET(req: NextRequest) {
       downPayment: mortgage.downPayment,
     },
     mappedExtras,
-    balanceAnchor
+    balanceAnchor,
+    mappedEscrowChanges
   );
 
   const data = rows.map((r) => ({

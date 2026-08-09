@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { mortgages, mortgageExtraPayments } from "@/lib/db/schema";
+import { mortgages, mortgageExtraPayments, mortgageEscrowChanges } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { buildScheduleWithBalanceAnchor } from "@/lib/mortgage";
 import { getLatestMortgageBalanceAnchor } from "@/lib/mortgage-balance-anchor";
@@ -29,6 +29,11 @@ export async function GET(
     .from(mortgageExtraPayments)
     .where(eq(mortgageExtraPayments.mortgageId, mortgage.id));
 
+  const escrowChanges = await db
+    .select()
+    .from(mortgageEscrowChanges)
+    .where(eq(mortgageEscrowChanges.mortgageId, mortgage.id));
+
   const balanceAnchor = mortgage.isActive
     ? await getLatestMortgageBalanceAnchor()
     : null;
@@ -46,7 +51,8 @@ export async function GET(
       downPayment: mortgage.downPayment,
     },
     extras.map((e) => ({ paymentDate: e.paymentDate, amount: e.amount })),
-    balanceAnchor
+    balanceAnchor,
+    escrowChanges.map((c) => ({ effectiveDate: c.effectiveDate, amount: c.amount }))
   );
 
   return NextResponse.json({ mortgage, extras, schedule: rows, summary });
