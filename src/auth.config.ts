@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 
 // Edge-safe config only — no DB imports. Middleware uses this bundle.
 export const authConfig = {
+  trustHost: true,
   providers: [],
   pages: {
     signIn: "/login",
